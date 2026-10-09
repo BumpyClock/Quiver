@@ -1,5 +1,5 @@
 {
-  "name": "Hurl Extension",
+  "name": "Quiver Extension",
   "description": "Lets you open tabs in other Browsers",
   "version": "0.3.0",
   "manifest_version": 3,
@@ -16,6 +16,6 @@
   "permissions": ["contextMenus", "activeTab", "nativeMessaging"],
   "host_permissions": ["<all_urls>"],
 
-  "homepage_url": "https://github.com/U-C-S/Hurl",
+  "homepage_url": "https://github.com/BumpyClock/Quiver",
   "author": "Chanakya"
 }

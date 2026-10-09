@@ -1,13 +1,13 @@
-name: Release snapshot
+name: Package snapshot
+
+permissions:
+  contents: read
 
 on:
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
-  release:
+  package:
     runs-on: windows-latest
 
     steps:
@@ -15,24 +15,16 @@ jobs:
         uses: actions/checkout@v6
       - name: rustup toolchain install
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc,aarch64-pc-windows-msvc
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
-      - name: Build Hurl and its components
+      - name: Build Quiver MSIX bundle
         run: .\build.ps1
-      - name: Create GitHub snapshot release
-        shell: pwsh
-        run: |
-          $date = get-date -Format 'yyyyMMdd'
-          $commitFull = '${{ github.sha }}'
-          $commitShort = '${{ github.sha }}'.Substring(0, 7)
-          $tag = "vSnapshot-$date-$commitShort"
-          gh release create $tag './Utils/Hurl_Installer.exe' --title "snapshot-$date-$commitShort" --prerelease --generate-notes --target $commitFull
-        env:
-          GH_TOKEN: ${{ github.token }}
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: Hurl_Installer
-          path: ./Utils/Hurl_Installer.exe
+          name: Quiver_msixbundle
+          path: ./_Publish/*.msixbundle

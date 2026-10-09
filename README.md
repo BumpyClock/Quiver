@@ -1,22 +1,22 @@
 <div align="center">
-  <img width="128" src="Source/Hurl.App/Assets/internet.ico">
+  <img width="128" src="Source/Quiver.App/Assets/internet.ico">
   
-  <h1>Hurl</h1>
+  <h1>Quiver</h1>
   
   <p align="center">A windows utility that lets you choose a browser on the click of a link</p>
   
   <p align="center">
-    <a style="text-decoration:none" href="https://github.com/U-C-S/Hurl/releases">
-      <img src="https://img.shields.io/github/v/release/u-c-s/hurl?color=red&label=latest%20version&style=flat-square" alt="Releases" />
+    <a style="text-decoration:none">
+      <img src="https://img.shields.io/badge/distribution-Microsoft%20Store-0078D4.svg?style=flat-square" alt="Microsoft Store" />
     </a>
     <a style="text-decoration:none">
-      <img src="https://img.shields.io/badge/platform-Windows%2011-blue.svg?style=flat-square" alt="Platform" />
+      <img src="https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-blue.svg?style=flat-square" alt="Platform" />
     </a>
     <a style="text-decoration:none">
-      <img src="https://img.shields.io/github/license/u-c-s/hurl?style=flat-square" alt="License" />
+      <img src="https://img.shields.io/github/license/BumpyClock/Quiver?style=flat-square" alt="License" />
     </a>
-    <a style="text-decoration:none" href="https://github.com/U-C-S/Hurl/commits">
-      <img src="https://img.shields.io/github/last-commit/u-c-s/hurl?color=orange&style=flat-square" alt="Commits" />
+    <a style="text-decoration:none" href="https://github.com/BumpyClock/Quiver/commits">
+      <img src="https://img.shields.io/github/last-commit/BumpyClock/Quiver?color=orange&style=flat-square" alt="Commits" />
     </a>
   </p>
 </div>
@@ -26,43 +26,44 @@
 
 ## Why and what?
 
-Sometimes you might want to open a link in a browser of your choice, instead of the default one. Hurl lets you choose the browser each time you click a link (links outside of browsers). So naturally, it acts as default browser to do that.
+Sometimes you might want to open a link in a browser of your choice, instead of the default one. Quiver lets you choose the browser each time you click a link (links outside of browsers). So naturally, it acts as default browser to do that.
 
 - Modern Windows UI with multiple customization options
 - Supports adding custom browser configuration with Launch Arguments
 - Rules to automatically open a browser without prompting
 - Settings window to manage all the features
 - Quickly view URLs by launching them into a WebView2 window or your preferred browser with a shortcut (experimental)
-- A Web Extension to open browser tabs in Hurl (experimental)
+- A Web Extension to open browser tabs in Quiver (experimental)
 
 <p align="center">
-  <img width="640" src="Docs/Images/HurlMainWindow010.png" />
+  <img width="640" src="Docs/Images/QuiverMainWindow010.png" />
 </p>
 
 ## Installation and usage
 
-Download and install the latest version of [Hurl_Installer](https://github.com/U-C-S/Hurl/releases/latest)
+Install Quiver from the Microsoft Store. Updates are delivered through the Store.
 
-> [!TIP]
-> It is recommended to uninstall your current version before installing a new version.
+After installing, make sure to set Quiver as the default `http/https` protocol handler aka as the default browser in the Windows Settings. In Windows 11: **Settings** > **Apps** > **Default apps** > **Quiver** (set `http`, `https`, `.html`, `.htm` and `.pdf`).
 
-After installing, make sure to set Hurl as the default `http/https` protocol handler aka as the default browser in the Windows Settings. In Windows 11: **Settings** > **Apps** > **Default apps** > **Hurl** > **Set as default browser**.
+Open settings from the tray icon menu, or right-click **Quiver** in Start or on the taskbar and pick **Quiver Settings**. From a terminal, the `quiver` alias works too, e.g. `quiver --settings`.
 
 Vist to [Docs](./Docs/README.md) for more details on usage and configuration.
 See [Extensions readme](./Extensions/README.md) for installing the Browser Extension.
 
 ## Building from source / local development
 
-- Install [Visual Studio 2026](https://visualstudio.microsoft.com/downloads/) with following workloads:
-  - WinUI application development
-  - Desktop development with C++ (required for building Launcher)
-- After forking and cloning the repository, open the solution file `./Hurl.sln` in Visual Studio. Set **Hurl.App** as the startup project.
-- Install [Rustup / Setup Rust complier](https://www.rust-lang.org/tools/install) locally to debug Launcher app
-- Install [Inno Setup](https://jrsoftware.org/isdl.php) to create the Hurl Installer
+Requirements:
 
-Use the Build Script from `Utils/build.ps1` to build the application in _Release_ mode and build the installer. Make sure you have all the tools installed mentioned in the above description.
+- [Visual Studio 2026](https://visualstudio.microsoft.com/downloads/) with the WinUI application development workload (for debugging)
+- [.NET 10 SDK](https://dotnet.microsoft.com/download)
+- Windows SDK 10.0.26100
+- Rust via [rustup](https://www.rust-lang.org/tools/install), with the MSVC build tools (x64 and ARM64 MSVC components)
 
-To check out older versions source code, go to [Github Tags](https://github.com/U-C-S/Hurl/tags).
+Run `./build.ps1` from the repo root. It builds the Rust NativeMessagingHost for each architecture, publishes the NativeAOT MSIX for x64 and arm64, and bundles them into `_Publish/Quiver_<version>.msixbundle` for Partner Center upload. Use `./build.ps1 -Platforms x64` to build a single architecture.
+
+For local debugging, open `./Quiver.sln` in Visual Studio and run the **Quiver.App (Package)** launch profile, which deploys the MSIX. Build `NativeMessagingHost.exe` first: `cargo build --release --target x86_64-pc-windows-msvc`.
+
+To check out older versions source code, go to [Github Tags](https://github.com/BumpyClock/Quiver/tags).
 
 ## Contributing
 

@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <UseWinUI>true</UseWinUI>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <WindowsSdkPackageVersion>10.0.26100.56</WindowsSdkPackageVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../Source/Quiver.Library/Quiver.Library.csproj" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.Runtime" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" />
+    <PackageReference Include="System.Drawing.Common" />
+    <Compile Include="../../Source/Quiver.App/Services/Interfaces/IIconLoader.cs" Link="IIconLoader.cs" />
+    <Compile Include="../../Source/Quiver.App/Services/Interfaces/ISettingsService.cs" Link="ISettingsService.cs" />
+    <Compile Include="../../Source/Quiver.App/Services/IconLoaderService.cs" Link="IconLoaderService.cs" />
+    <Compile Include="../../Source/Quiver.App/ViewModels/Settings/BrowserIconDialogViewModel.cs" Link="BrowserIconDialogViewModel.cs" />
+    <Compile Include="../../Source/Quiver.App/ViewModels/BrowserItemViewModel.cs" Link="BrowserItemViewModel.cs" />
+    <Compile Include="../../Source/Quiver.App/ViewModels/SelectorPageViewModel.cs" Link="SelectorPageViewModel.cs" />
+    <Compile Include="../../Source/Quiver.App/ViewModels/Settings/RulesetPageViewModel.cs" Link="RulesetPageViewModel.cs" />
+    <Compile Include="../../Source/Quiver.App/Helpers/UriLauncher.cs" Link="UriLauncher.cs" />
+  </ItemGroup>
+</Project>

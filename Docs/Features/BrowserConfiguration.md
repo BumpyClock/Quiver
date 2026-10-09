@@ -1,6 +1,6 @@
 # Browsers
 
-Manage browsers in **Hurl Settings > Browsers**, or edit the top-level `Browsers` array in [UserSettings.json](../README.md).
+Manage browsers in **Quiver Settings > Browsers**, or edit the top-level `Browsers` array in [UserSettings.json](../README.md).
 The settings UI supports creating, editing, deleting, and dragging browser entries to reorder them.
 
 - `Id` - Stable UUID for this browser. Various other settings refer to this browser by this Id. Required.
@@ -16,17 +16,17 @@ The settings UI supports creating, editing, deleting, and dragging browser entri
 Click the icon preview beside **Name** and **Executable Path** to open **Select Browser Icon**:
 
 - **Exe Icons** shows the icons embedded in the executable, labeled with their zero-based index. Selecting `icon 0` restores the default.
+- **Next icons** and **Previous icons** browse executable icons 16 at a time. The selected icon stays selected when you change pages.
 - **Local Image** opens a local file picker for ICO, PNG, JPEG, BMP, GIF, or TIFF images. The source file should be available all times.
 - **From URL** loads a direct HTTP(S) image URL. Press Enter or the arrow button to preview it.
 
-Hurl falls back to the executable's default icon if the override cannot be loaded.
+Quiver falls back to the executable's default icon if the override cannot be loaded. Image files and URL responses must be at most 8 MiB. Icons are decoded to fit within 256 × 256 pixels while keeping their proportions.
 
 ### Caching
 
-All images are cached in the `%APPDATA%/Roaming/Hurl/cache/icons`. As of now, the cache is not automatically
-cleared.
+Images are cached in `%LOCALAPPDATA%\Packages\<PackageFamilyName>\LocalState\cache\icons`. The disk cache is limited to 64 MiB, and entries older than 30 days are removed as new icons are cached. Up to 64 decoded images are kept in memory.
 
-The cache will be update automatically if the original file changes versions or the config changes.
+The cache updates when a local source file or icon configuration changes. URL icons refresh after their cached entry expires.
 
 ### Or in the UserSettings.json
 
@@ -73,15 +73,15 @@ button in the selector to choose an alternate launch. Add this property to the b
 
 Selecting an alternate launch includes the URL automatically. Its arguments replace the browser's default `LaunchArgs`; they are not combined.
 
-![Alternate-launch menu in an older Hurl version](../Images/BrowserProfiles.png)
+![Alternate-launch menu in an older Quiver version](../Images/BrowserProfiles.png)
 
 - `ItemName` - The name that shows up in the context menu for this launch
 - `LaunchArgs` - Arguments for this alternate launch, such as an incognito flag or profile directory. Supports `%URL%` with the same behavior as the browser's default arguments.
-- `Id` - Stable UUID for this alternate launch. Hurl generates one when absent. Preserve it when rulesets or Quick View target this profile.
+- `Id` - Stable UUID for this alternate launch. Quiver generates one when absent. Preserve it when rulesets or Quick View target this profile.
 
 ## Refreshing Browsers list
 
-Select **Refresh** on the **Browsers** page in Hurl Settings to choose between two modes:
+Select **Refresh** on the **Browsers** page in Quiver Settings to choose between two modes:
 
 - **Preserve existing** compares detected browsers by `ExePath` and appends only those without an existing
   match. Existing settings and IDs are kept.

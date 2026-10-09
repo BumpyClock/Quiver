@@ -1,0 +1,7 @@
+{
+  "profiles": {
+    "Quiver.App (Package)": {
+      "commandName": "MsixPackage"
+    }
+  }
+}

@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://raw.githubusercontent.com/U-C-S/Hurl/main/Utils/UserSettings.schema.json",
-  "title": "Hurl UserSettings Schema",
+  "$id": "https://raw.githubusercontent.com/BumpyClock/Quiver/main/Utils/UserSettings.schema.json",
+  "title": "Quiver UserSettings Schema",
   "type": "object",
   "properties": {
     "LastUpdated": {
@@ -80,31 +80,15 @@
     "AppSettings": {
       "type": "object",
       "properties": {
-        "LaunchUnderMouse": {
+        "MinimizeOnFocusLoss": {
           "type": "boolean",
-          "description": "If true, the browser will be launched under the mouse cursor."
+          "description": "Hide the picker when it loses focus.",
+          "default": true
         },
         "RuleMatching": {
           "type": "boolean",
-          "description": "If true, Enables Rule Matching feature with the rules defined in the 'Rulesets' Property."
-        },
-        "BackgroundType": {
-          "type": "string",
-          "description": "The type of background to use for the browser window.",
-          "enum": ["mica", "acrylic"],
-          "default": "mica"
-        },
-        "WindowSize": {
-          "type": "array",
-          "description": "The size of the Hurl browser selector window. define as an array of two integers for width and height.",
-          "items": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "integer"
-            }
-          ]
+          "description": "Enable automatic browser selection using the configured rulesets.",
+          "default": false
         }
       }
     },

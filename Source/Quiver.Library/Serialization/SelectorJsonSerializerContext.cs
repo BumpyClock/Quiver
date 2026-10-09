@@ -1,0 +1,21 @@
+using Quiver.Library.Models;
+using System.Collections.ObjectModel;
+using System.Text.Json.Serialization;
+
+namespace Quiver.Library.Serialization;
+
+[JsonSourceGenerationOptions(
+    PropertyNameCaseInsensitive = true,
+    WriteIndented = true)]
+[JsonSerializable(typeof(Settings))]
+[JsonSerializable(typeof(AppSettings))]
+[JsonSerializable(typeof(QuickViewSettings))]
+[JsonSerializable(typeof(QuickViewLaunchMode))]
+[JsonSerializable(typeof(QuickViewModifierKeys))]
+[JsonSerializable(typeof(QuickViewTrackingPreventionLevel))]
+[JsonSerializable(typeof(Browser))]
+[JsonSerializable(typeof(BrowserIcon))]
+[JsonSerializable(typeof(AlternateLaunch))]
+[JsonSerializable(typeof(Ruleset))]
+[JsonSerializable(typeof(ObservableCollection<Browser>))]
+public partial class SelectorJsonSerializerContext : JsonSerializerContext { }

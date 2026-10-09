@@ -1,0 +1,27 @@
+using Windows.Storage;
+
+namespace Quiver.Library;
+
+public class Constants
+{
+    public const string NAME = "Quiver";
+    public const string DESCRIPTION = "Quiver - A tool to select the browsers dynamically";
+    public const string VERSION = "0.10.0";
+    public const string SOURCE_CODE_LINK = "https://github.com/BumpyClock/Quiver";
+
+    public static string APP_PARENT_DIR = AppContext.BaseDirectory;
+    public static string APP_LAUNCH_PATH = Environment.GetCommandLineArgs()[0];
+    public static string ROAMING = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+    // Packaged writes to %APPDATA% are virtualized and invisible to Explorer, so use the package's LocalState.
+    public static string APP_SETTINGS_DIR = PackageIdentity.IsPackaged ? ApplicationData.Current.LocalFolder.Path : Path.Combine(ROAMING, NAME);
+    public static string APP_SETTINGS_MAIN = Path.Combine(APP_SETTINGS_DIR, "UserSettings.json");
+
+    public const string NEW_LINE = "1&#x0a;";
+
+
+    //public static string APP_SE_AB = AppContext.BaseDirectory;
+    //public static string APP_SE_1 = Environment.GetCurrentDirectory();
+    //public static string APP_SE_2 = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+    //public static string APP_SE_3 = Path.GetDirectoryName(Uri.UnescapeDataString(new UriBuilder(Assembly.GetExecutingAssembly().CodeBase).Path));
+    //public static string APP_SE_4 = AppDomain.CurrentDomain.BaseDirectory;
+}

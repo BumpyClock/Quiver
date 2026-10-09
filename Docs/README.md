@@ -6,16 +6,15 @@
 - [Rule Matching](./Features/RuleMatching.md)
 - [Quick View](./Features/QuickView.md)
 
-When Hurl is lauched for the first time, it automatically detects the installed browsers and creates a _UserSettings.json_ file at `C:\Users\{USER}\AppData\Roaming\Hurl` filling it with browsers it detected. A typical UserSettings.json file looks like this:
+Developer verification: [Performance and memory changes](./Dev/Performance.md).
+
+When Quiver is launched for the first time, it automatically detects the installed browsers and creates a _UserSettings.json_ file in the package's LocalState folder (`%LOCALAPPDATA%\Packages\<PackageFamilyName>\LocalState\UserSettings.json`), filling it with browsers it detected. The easiest way to open it is **Quiver Settings** > **Settings** page > **edit JSON** button. A typical UserSettings.json file looks like this:
 
 ```json
 {
   "AppSettings": {
-    "LaunchUnderMouse": false,
     "MinimizeOnFocusLoss": true,
-    "BackgroundType": "mica",
-    "RuleMatching": false,
-    "WindowSize": [500, 260]
+    "RuleMatching": false
   },
   "Browsers": [
     {
@@ -51,18 +50,14 @@ The following snippet shows the default options:
 
 ```json
 "AppSettings": {
-    "LaunchUnderMouse": false,
     "MinimizeOnFocusLoss": true,
-    "BackgroundType": "mica",
-    "RuleMatching": false,
-    "WindowSize": [460,230]
+    "RuleMatching": false
 }
 ```
 
 ### Available options
 
-- `LaunchUnderMouse` default is **false**, can be used to launch the Hurl window under the mouse when enabled
-- `MinimizeOnFocusLoss` default is **true**
-- `BackgroundType` supports **mica** (default) and **acrylic** for the selector window.
-- `RuleMatching` defaults to **false**. Enable it in **Hurl Settings > Rulesets** to automatically open links using [rule matching](./Features/RuleMatching.md).
-- `WindowSize` stores the selector's width and height, defaults to **[500, 260]**, and is saved when you finish resizing the window. The minimum size is also 500 by 260.
+- `MinimizeOnFocusLoss` defaults to **true** and hides the picker when you click outside it.
+- `RuleMatching` defaults to **false**. Enable it in **Quiver Settings > Rulesets** to automatically open links using [rule matching](./Features/RuleMatching.md).
+
+The radial picker opens near the cursor and sizes itself to fit its browser choices. Legacy "LaunchUnderMouse", "BackgroundType", and "WindowSize" values are ignored.
