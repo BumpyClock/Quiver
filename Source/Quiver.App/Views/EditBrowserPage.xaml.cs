@@ -22,11 +22,13 @@ public sealed partial class EditBrowserPage : Page
     public EditBrowserPage()
     {
         InitializeComponent();
+        Unloaded += (_, _) => ViewModel?.CancelIconPreviewLoad();
     }
 
     public EditBrowserPage(Browser browser)
     {
         InitializeComponent();
+        Unloaded += (_, _) => ViewModel?.CancelIconPreviewLoad();
         InitializeForBrowser(browser);
     }
 
@@ -58,6 +60,12 @@ public sealed partial class EditBrowserPage : Page
             InitializeForBrowser(new Browser(), isNewBrowser: true);
         }
 
+    }
+
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        ViewModel?.CancelIconPreviewLoad();
+        base.OnNavigatedFrom(e);
     }
 
     private void AddAlternate_Click(object sender, RoutedEventArgs e)

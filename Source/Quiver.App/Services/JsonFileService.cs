@@ -5,7 +5,9 @@ using Quiver.Library.Serialization;
 using System;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Diagnostics;
 using System.Text.Json;
+using System.Threading.Tasks;
 
 namespace Quiver.App.Services;
 
@@ -13,6 +15,12 @@ public class JsonFileService : ISettingsService
 {
     private readonly string settingsPath;
     private Settings? settings;
+    private PreparedRulesets? preparedRulesets;
+    private readonly object saveLock = new();
+    private byte[]? pendingJson;
+    private Task? saveTask;
+
+    public PreparedRulesets PreparedRulesets => preparedRulesets ??= RuleMatch.PrepareRulesets(LoadSettings().Rulesets);
 
     public JsonFileService(string? settingsPath = null)
     {
@@ -54,13 +62,58 @@ public class JsonFileService : ISettingsService
 
     private void SaveSettings(SettingsSection section)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(settingsPath))!);
-        string json = JsonSerializer.Serialize(settings, SelectorJsonSerializerContext.Default.Settings);
-        // Replace only after the complete document is written.
-        string temporaryPath = settingsPath + ".tmp";
-        File.WriteAllText(temporaryPath, json);
-        File.Move(temporaryPath, settingsPath, overwrite: true);
+        // Capture on the UI thread so the writer never reads mutable settings.
+        byte[] json = JsonSerializer.SerializeToUtf8Bytes(settings, SelectorJsonSerializerContext.Default.Settings);
+        lock (saveLock)
+        {
+            pendingJson = json;
+            saveTask ??= Task.Run(WritePendingSettingsAsync);
+        }
         SettingsChanged?.Invoke(this, new SettingsChangedEventArgs(section));
+    }
+
+    public Task FlushAsync()
+    {
+        lock (saveLock)
+        {
+            if (pendingJson is not null) saveTask ??= Task.Run(WritePendingSettingsAsync);
+            return saveTask ?? Task.CompletedTask;
+        }
+    }
+
+    private async Task WritePendingSettingsAsync()
+    {
+        byte[]? json = null;
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(settingsPath))!);
+            while (true)
+            {
+                lock (saveLock)
+                {
+                    json = pendingJson;
+                    pendingJson = null;
+                    if (json is null)
+                    {
+                        saveTask = null;
+                        return;
+                    }
+                }
+                string temporaryPath = settingsPath + ".tmp";
+                await File.WriteAllBytesAsync(temporaryPath, json).ConfigureAwait(false);
+                File.Move(temporaryPath, settingsPath, overwrite: true);
+            }
+        }
+        catch (Exception ex)
+        {
+            lock (saveLock)
+            {
+                pendingJson ??= json;
+                saveTask = null;
+            }
+            Debug.WriteLine($"Could not save settings: {ex}");
+            throw;
+        }
     }
 
     public void UpdateAppSettings(AppSettings appSettings)
@@ -84,6 +137,7 @@ public class JsonFileService : ISettingsService
     public void UpdateRulesets(ObservableCollection<Ruleset> rulesets)
     {
         LoadSettings().Rulesets = [.. rulesets];
+        preparedRulesets = null;
         SaveSettings(SettingsSection.Rulesets);
     }
 }

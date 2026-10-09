@@ -1,12 +1,16 @@
 using Quiver.Library.Models;
+using Quiver.Library;
 using System;
 using System.Collections.ObjectModel;
+using System.Threading.Tasks;
 
 namespace Quiver.App.Services.Interfaces;
 
 public interface ISettingsService
 {
     Settings LoadSettings();
+    PreparedRulesets PreparedRulesets { get; }
+    Task FlushAsync();
     event EventHandler<SettingsChangedEventArgs>? SettingsChanged;
     void UpdateAppSettings(AppSettings appSettings);
     void UpdateQuickView(QuickViewSettings quickView);

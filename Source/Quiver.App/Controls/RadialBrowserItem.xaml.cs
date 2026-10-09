@@ -21,7 +21,9 @@ public sealed partial class RadialBrowserItem : UserControl
     private bool isPointerOver;
     private bool isFocused;
     private bool isHighlighted;
+    private Compositor? animationCompositor;
     private Vector3KeyFrameAnimation? scaleAnimation;
+    private CubicBezierEasingFunction? scaleEasing;
 
     public RadialBrowserItem()
     {
@@ -168,12 +170,19 @@ public sealed partial class RadialBrowserItem : UserControl
             return;
         }
 
-        scaleAnimation ??= visual.Compositor.CreateVector3KeyFrameAnimation();
-        scaleAnimation.InsertKeyFrame(1f, target, visual.Compositor.CreateCubicBezierEasingFunction(
-            new Vector2(0.16f, 1f),
-            new Vector2(0.3f, 1f)));
-        scaleAnimation.Duration = ScaleAnimationDuration;
-        visual.StartAnimation("Scale", scaleAnimation);
+        if (!ReferenceEquals(animationCompositor, visual.Compositor))
+        {
+            animationCompositor = visual.Compositor;
+            scaleAnimation = animationCompositor.CreateVector3KeyFrameAnimation();
+            scaleEasing = animationCompositor.CreateCubicBezierEasingFunction(
+                new Vector2(0.16f, 1f),
+                new Vector2(0.3f, 1f));
+        }
+
+        var animation = scaleAnimation!;
+        animation.InsertKeyFrame(1f, target, scaleEasing!);
+        animation.Duration = ScaleAnimationDuration;
+        visual.StartAnimation("Scale", animation);
     }
     #endregion
 }

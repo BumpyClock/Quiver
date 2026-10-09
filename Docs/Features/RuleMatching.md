@@ -12,6 +12,10 @@ Quiver checks rules when a URL is passed to the app. The first matching ruleset 
 the selector opens. Holding the [Quick View shortcut](./QuickView.md) takes precedence
 over rules.
 
+Matching runs in the background so the interface stays available while rules are checked. A newer URL
+activation replaces an unfinished check for an older URL. Changing rules or browser settings restarts a
+pending check against the current configuration. First-match ordering remains the same.
+
 ## Types of rules
 
 - `String`: Matches the entire URL exactly and is case-sensitive. Differences in the scheme, path casing, query string, or trailing slash prevent a match.
@@ -54,6 +58,7 @@ Click the link in the center of the selector and choose **Rules**, or open **Set
 
 Use a ruleset's menu to **Edit**, **Move Up**, **Move Down**, or **Delete** it. The UI can reorder rulesets,
 not reorder individual rules within them.
+The rule editor scrolls its rule rows separately; edits remain in the draft when rows scroll out of view.
 
 ## From UserSettings.json
 

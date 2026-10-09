@@ -24,7 +24,7 @@ Quiver falls back to the executable's default icon if the override cannot be loa
 
 ### Caching
 
-Images are cached in `%LOCALAPPDATA%\Packages\<PackageFamilyName>\LocalState\cache\icons`. The disk cache is limited to 64 MiB, and entries older than 30 days are removed as new icons are cached. Up to 64 decoded images are kept in memory.
+Images are cached in `%LOCALAPPDATA%\Packages\<PackageFamilyName>\LocalState\cache\icons`. Background maintenance removes entries older than 30 days and trims the disk cache to 64 MiB after new writes; a burst of writes can temporarily exceed that budget. The icon service keeps up to 64 decoded images in memory. Browser settings load icons for realized rows and release row references when they are recycled.
 
 The cache updates when a local source file or icon configuration changes. URL icons refresh after their cached entry expires.
 

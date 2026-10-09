@@ -30,7 +30,9 @@ Configure it in **Quiver Settings > Quick View**, or add the following top-level
 
 ### WebView2 Configuration
 - Additional browser arguments are saved when you leave the text field, navigate to another settings page,
-  or close the settings window. Other Quick View options are saved immediately.
+  close the settings window, exit, or restart Quiver. Other Quick View options queue a save when changed.
+  Settings writes run in the background and finish before normal close, exit, or restart. If a save fails,
+  Quiver keeps the settings window or app open so you can retry; forced termination can interrupt a queued save.
 - `AdditionalBrowserArguments` and `BrowserExtensionsEnabled` configure the WebView2 environment.
   Restart Quiver after changing them if you have already opened a Quick View window.
 - `TrackingPrevention` supports `None`, `Basic`, `Balanced` (default), or `Strict` for the WebView2 profile.

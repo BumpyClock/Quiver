@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using System;
 using System.Collections.ObjectModel;
+using System.Linq;
 
 namespace Quiver.App.Views;
 
@@ -16,12 +17,28 @@ public sealed partial class BrowsersPage : Page
     {
         ViewModel = App.Services!.GetRequiredService<BrowsersPageViewModel>();
         InitializeComponent();
-        Unloaded += (_, _) => ViewModel.CancelIconLoading();
+        Unloaded += BrowsersPage_Unloaded;
     }
 
-    private async void Page_Loaded(object sender, RoutedEventArgs e)
+    private void BrowserList_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
     {
-        await ViewModel.LoadIconsAsync();
+        BrowserContainerAssociation.Update(
+            (ListViewItem)args.ItemContainer,
+            args.InRecycleQueue ? null : args.Item as BrowserItemViewModel,
+            ViewModel);
+    }
+
+    private void BrowsersPage_Unloaded(object sender, RoutedEventArgs e)
+    {
+        if (BrowserList.ItemsPanelRoot is Panel panel)
+        {
+            foreach (ListViewItem container in panel.Children.OfType<ListViewItem>())
+            {
+                BrowserContainerAssociation.Update(container, null, ViewModel);
+            }
+        }
+
+        ViewModel.CancelIconLoading();
     }
 
     private async void RefreshButton_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
@@ -40,11 +57,11 @@ public sealed partial class BrowsersPage : Page
         ContentDialogResult result = await dialog.ShowAsync();
         if (result == ContentDialogResult.Primary)
         {
-            await ViewModel.RefreshBrowserListAsync(BrowserRefreshMode.PreserveExistingByExePath);
+            ViewModel.RefreshBrowserList(BrowserRefreshMode.PreserveExistingByExePath);
         }
         else if (result == ContentDialogResult.Secondary)
         {
-            await ViewModel.RefreshBrowserListAsync(BrowserRefreshMode.AddAllDetectedAsNew);
+            ViewModel.RefreshBrowserList(BrowserRefreshMode.AddAllDetectedAsNew);
         }
     }
 
