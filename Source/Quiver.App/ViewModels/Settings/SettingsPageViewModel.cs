@@ -18,21 +18,6 @@ public partial class SettingsPageViewModel : ObservableObject
         _settingsService = settingsService;
     }
 
-
-    public bool Option_LaunchUnderMouse
-    {
-        get => AppSettings.LaunchUnderMouse;
-        set
-        {
-            if (AppSettings.LaunchUnderMouse != value)
-            {
-                AppSettings.LaunchUnderMouse = value;
-                _settingsService.UpdateAppSettings(AppSettings);
-                OnPropertyChanged();
-            }
-        }
-    }
-
     public bool Option_MinimizeOnFocusLoss
     {
         get => AppSettings.MinimizeOnFocusLoss;
@@ -45,25 +30,6 @@ public partial class SettingsPageViewModel : ObservableObject
 
                 OnPropertyChanged();
             }
-        }
-    }
-
-    public int Option_BackgroundType
-    {
-        get => AppSettings.BackgroundType?.ToLowerInvariant() switch
-        {
-            "acrylic" => 1,
-            _ => 0
-        };
-        set
-        {
-            AppSettings.BackgroundType = value switch
-            {
-                1 => "acrylic",
-                _ => "mica"
-            };
-            _settingsService.UpdateAppSettings(AppSettings);
-            OnPropertyChanged();
         }
     }
 }

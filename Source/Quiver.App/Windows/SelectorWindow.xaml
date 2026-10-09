@@ -10,10 +10,15 @@
     x:Name="SelectorRoot"
     Title="Quiver - Select"
     mc:Ignorable="d">
+    <Window.SystemBackdrop>
+        <DesktopAcrylicBackdrop />
+    </Window.SystemBackdrop>
+
+    <!--  The window is clipped to a circle, so the acrylic backdrop forms the disc.  -->
     <Grid
-        Padding="8"
+        x:Name="DiscRoot"
         KeyboardAcceleratorPlacementMode="Hidden"
-        RowSpacing="8">
+        PreviewKeyDown="DiscRoot_PreviewKeyDown">
         <Grid.KeyboardAccelerators>
             <KeyboardAccelerator Key="C" Invoked="CopyAccelerator_Invoked" />
             <KeyboardAccelerator
@@ -23,122 +28,141 @@
             <KeyboardAccelerator Key="R" Invoked="RulesAccelerator_Invoked" />
             <KeyboardAccelerator Key="Escape" Invoked="EscapeAccelerator_Invoked" />
         </Grid.KeyboardAccelerators>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
 
-        <Grid Margin="8,0,44,0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <TextBlock
-                VerticalAlignment="Center"
-                Style="{StaticResource BodyTextBlockStyle}"
-                Text="Select a browser" />
-            <DropDownButton Grid.Column="1">
-                <DropDownButton.Content>
-                    <FontIcon FontSize="16" Glyph="&#xE700;" />
-                </DropDownButton.Content>
-                <DropDownButton.Flyout>
-                    <MenuFlyout>
-                        <MenuFlyoutItem
-                            Click="Button_Click_1"
-                            Tag="settings"
-                            Text="Rules">
-                            <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="&#xE710;" />
-                            </MenuFlyoutItem.Icon>
-                        </MenuFlyoutItem>
-                        <MenuFlyoutItem
-                            Click="SettingsBtnClick"
-                            Tag="exit"
-                            Text="Settings">
-                            <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="&#xE713;" />
-                            </MenuFlyoutItem.Icon>
-                        </MenuFlyoutItem>
-                    </MenuFlyout>
-                </DropDownButton.Flyout>
-            </DropDownButton>
-        </Grid>
+        <Ellipse
+            Margin="1"
+            IsHitTestVisible="False"
+            Stroke="{ThemeResource SurfaceStrokeColorFlyoutBrush}"
+            StrokeThickness="1.5" />
 
         <ItemsRepeater
-            Grid.Row="1"
+            x:Name="BrowserRing"
+            HorizontalAlignment="Center"
             VerticalAlignment="Center"
-            ItemsSource="{x:Bind ViewModel.Browsers, Mode=OneWay}">
+            ElementPrepared="BrowserRing_ElementPrepared"
+            ItemsSource="{x:Bind ViewModel.Browsers, Mode=OneWay}"
+            TabFocusNavigation="Local">
             <ItemsRepeater.Layout>
-                <UniformGridLayout
-                    ItemsJustification="Center"
-                    MaximumRowsOrColumns="4"
-                    MinColumnSpacing="12"
-                    MinItemHeight="132"
-                    MinItemWidth="132"
-                    MinRowSpacing="8" />
+                <controls:RadialLayout />
             </ItemsRepeater.Layout>
-
             <ItemsRepeater.ItemTemplate>
                 <DataTemplate x:DataType="viewModels:BrowserItemViewModel">
-                    <controls:BrowserBarButton
-                        AlternateLaunchRequested="BrowserBarButton_AlternateLaunchRequested"
-                        BrowserItem="{x:Bind}"
-                        LaunchCommand="{Binding ViewModel.LaunchBrowserCommand, ElementName=SelectorRoot}" />
+                    <controls:RadialBrowserItem BrowserItem="{x:Bind}" />
                 </DataTemplate>
             </ItemsRepeater.ItemTemplate>
         </ItemsRepeater>
 
-        <Border
-            Grid.Row="2"
-            Margin="8,0"
-            Padding="4"
+        <Button
+            x:Name="HubButton"
+            Width="112"
+            Height="112"
+            Padding="10"
             HorizontalAlignment="Center"
-            BorderBrush="{StaticResource ControlElevationBorderBrush}"
-            BorderThickness="1.5"
-            CornerRadius="6">
-            <Grid ColumnSpacing="4">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition MinWidth="240" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <Button
-                    Padding="6"
-                    Background="{x:Null}"
-                    BorderBrush="{x:Null}"
-                    Click="LinkCopyBtnClick"
-                    ToolTipService.ToolTip="Copy URL (C)">
-                    <Button.Content>
-                        <FontIcon FontSize="16" Glyph="&#xE8C8;" />
-                    </Button.Content>
-                </Button>
+            VerticalAlignment="Center"
+            AutomationProperties.Name="Link options"
+            BorderThickness="1"
+            CornerRadius="56"
+            ToolTipService.ToolTip="{x:Bind ViewModel.Url, Mode=OneWay}">
+            <Button.Resources>
+                <ResourceDictionary>
+                    <ResourceDictionary.ThemeDictionaries>
+                        <ResourceDictionary x:Key="Default">
+                            <StaticResource x:Key="ButtonBackground" ResourceKey="LayerFillColorDefaultBrush" />
+                            <StaticResource x:Key="ButtonBorderBrush" ResourceKey="CardStrokeColorDefaultBrush" />
+                        </ResourceDictionary>
+                        <ResourceDictionary x:Key="Light">
+                            <StaticResource x:Key="ButtonBackground" ResourceKey="LayerFillColorDefaultBrush" />
+                            <StaticResource x:Key="ButtonBorderBrush" ResourceKey="CardStrokeColorDefaultBrush" />
+                        </ResourceDictionary>
+                        <ResourceDictionary x:Key="HighContrast">
+                            <StaticResource x:Key="ButtonBackground" ResourceKey="SystemControlBackgroundBaseLowBrush" />
+                            <StaticResource x:Key="ButtonBorderBrush" ResourceKey="SystemControlForegroundTransparentBrush" />
+                        </ResourceDictionary>
+                    </ResourceDictionary.ThemeDictionaries>
+                </ResourceDictionary>
+            </Button.Resources>
+            <Button.Flyout>
+                <MenuFlyout
+                    x:Name="HubMenu"
+                    Opening="HubMenu_Opening"
+                    Placement="Bottom"
+                    ShouldConstrainToRootBounds="False">
+                    <MenuFlyoutItem
+                        Click="LinkCopyBtnClick"
+                        KeyboardAcceleratorTextOverride="C"
+                        Text="Copy link">
+                        <MenuFlyoutItem.Icon>
+                            <FontIcon Glyph="&#xE8C8;" />
+                        </MenuFlyoutItem.Icon>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutItem
+                        Click="EditUrlBtnClick"
+                        KeyboardAcceleratorTextOverride="Alt+E"
+                        Text="Edit link">
+                        <MenuFlyoutItem.Icon>
+                            <FontIcon Glyph="&#xE70F;" />
+                        </MenuFlyoutItem.Icon>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutItem
+                        x:Name="QuickViewMenuItem"
+                        Click="QuickViewBtnClick"
+                        Text="Quick View">
+                        <MenuFlyoutItem.Icon>
+                            <FontIcon Glyph="&#xE8A7;" />
+                        </MenuFlyoutItem.Icon>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutSeparator />
+                    <MenuFlyoutItem
+                        Click="RulesBtnClick"
+                        KeyboardAcceleratorTextOverride="R"
+                        Text="Rules">
+                        <MenuFlyoutItem.Icon>
+                            <FontIcon Glyph="&#xE710;" />
+                        </MenuFlyoutItem.Icon>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutItem Click="SettingsBtnClick" Text="Settings">
+                        <MenuFlyoutItem.Icon>
+                            <FontIcon Glyph="&#xE713;" />
+                        </MenuFlyoutItem.Icon>
+                    </MenuFlyoutItem>
+                </MenuFlyout>
+            </Button.Flyout>
+            <StackPanel VerticalAlignment="Center" Spacing="2">
+                <TextBlock
+                    x:Name="HubTitle"
+                    HorizontalAlignment="Center"
+                    MaxLines="2"
+                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                    TextAlignment="Center"
+                    TextTrimming="CharacterEllipsis"
+                    TextWrapping="Wrap" />
+                <TextBlock
+                    x:Name="HubSubtitle"
+                    HorizontalAlignment="Center"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    MaxLines="1"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    TextAlignment="Center"
+                    TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+        </Button>
+
+        <FlyoutBase.AttachedFlyout>
+            <Flyout
+                x:Name="EditUrlFlyout"
+                Closed="EditUrlFlyout_Closed"
+                Placement="Bottom"
+                ShouldConstrainToRootBounds="False">
                 <TextBox
                     x:Name="UrlTextBox"
-                    Grid.Column="1"
-                    MaxHeight="32"
-                    Padding="6"
-                    HorizontalAlignment="Stretch"
-                    BorderBrush="{StaticResource ControlElevationBorderBrush}"
-                    FontSize="12"
+                    Width="360"
+                    Header="Link"
                     IsSpellCheckEnabled="False"
                     IsTextPredictionEnabled="False"
-                    PlaceholderText="URL"
-                    Text="{x:Bind ViewModel.Url, Mode=TwoWay}"
-                    ToolTipService.ToolTip="Edit URL (Alt+E)" />
-                <Button
-                    x:Name="QuickViewButton"
-                    Grid.Column="2"
-                    Padding="6"
-                    Background="{x:Null}"
-                    BorderBrush="{x:Null}"
-                    Click="QuickViewBtnClick"
-                    ToolTipService.ToolTip="Quick View">
-                    <Button.Content>
-                        <FontIcon FontSize="16" Glyph="&#xE8A7;" />
-                    </Button.Content>
-                </Button>
-            </Grid>
-        </Border>
+                    KeyDown="UrlTextBox_KeyDown"
+                    PlaceholderText="https://"
+                    Text="{x:Bind ViewModel.Url, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+            </Flyout>
+        </FlyoutBase.AttachedFlyout>
     </Grid>
 </Window>

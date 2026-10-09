@@ -4,31 +4,42 @@ using Quiver.App.Services.Interfaces;
 using Quiver.App.ViewModels;
 using Quiver.Library;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.UI.Composition;
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
+using System.Numerics;
+using System.Runtime.InteropServices;
 using Windows.ApplicationModel.DataTransfer;
+using Windows.Graphics;
+using Windows.System;
+using Windows.UI.ViewManagement;
 using WinRT;
+using WinRT.Interop;
 using WinUIEx;
-using WinUIEx.Messaging;
 
 namespace Quiver.App.Windows;
 
 [GeneratedBindableCustomProperty]
 public sealed partial class SelectorWindow : Window
 {
+    private static readonly TimeSpan OpenAnimationDuration = TimeSpan.FromMilliseconds(180);
+    private static readonly UISettings AnimationSettings = new();
+
     public SelectorPageViewModel ViewModel { get; }
     private readonly IQuickViewService quickViewService;
     private readonly ISettingsService settingsService;
+    private readonly IntPtr hwnd;
 
-    private WindowManager? windowManager;
-    private readonly WindowMessageMonitor windowMessageMonitor;
-
-    private bool isHiddenToTray;
-    private bool isSavingWindowSize;
+    private bool isHiddenToTray = true;
+    private RadialBrowserItem? highlightedItem;
 
     #region Window Lifecycle
     public SelectorWindow()
@@ -38,27 +49,25 @@ public sealed partial class SelectorWindow : Window
         quickViewService = services.GetRequiredService<IQuickViewService>();
         settingsService = services.GetRequiredService<ISettingsService>();
         ViewModel.BrowserLaunched += ViewModel_BrowserLaunched;
-        ExtendsContentIntoTitleBar = true;
-        this.AppWindow.TitleBar.PreferredHeightOption = Microsoft.UI.Windowing.TitleBarHeightOption.Tall;
+        ViewModel.PropertyChanged += ViewModel_PropertyChanged;
+        hwnd = WindowNative.GetWindowHandle(this);
 
-        windowManager = WindowManager.Get(this);
-        windowManager.IsMaximizable = false;
-        windowManager.IsMinimizable = false;
-        windowManager.IsAlwaysOnTop = true;
-        windowManager.MinWidth = 500;
-        windowManager.MinHeight = 260;
+        // A borderless, always-on-top popup that stays out of the taskbar and Alt+Tab.
+        var presenter = OverlappedPresenter.Create();
+        presenter.IsAlwaysOnTop = true;
+        presenter.IsMaximizable = false;
+        presenter.IsMinimizable = false;
+        presenter.IsResizable = false;
+        presenter.SetBorderAndTitleBar(false, false);
+        AppWindow.SetPresenter(presenter);
+        AppWindow.IsShownInSwitchers = false;
 
-        //this.AppWindow.IsShownInSwitchers = false;
-        ApplyConfiguredWindowSize();
         Activated += Window_Activated;
         Closed += SelectorWindow_Closed;
 
         InitializeComponent();
-        ApplyConfiguredBackground();
-        QuickViewButton.IsEnabled = quickViewService.IsQuickViewEnabled;
         settingsService.SettingsChanged += SettingsChanged;
-        windowMessageMonitor = new WindowMessageMonitor(this);
-        windowMessageMonitor.WindowMessageReceived += WindowMessageReceived;
+        UpdateHub();
     }
 
     public void Init(CliArgs args)
@@ -67,7 +76,6 @@ public sealed partial class SelectorWindow : Window
 
         if (args.IsRunAsMin)
         {
-            Activate();
             MinimizeWindow();
             return;
         }
@@ -75,9 +83,9 @@ public sealed partial class SelectorWindow : Window
         ShowWindow();
     }
 
-    private void Window_Deactivated(object sender, EventArgs e)
+    private void Window_Activated(object sender, WindowActivatedEventArgs args)
     {
-        if (isHiddenToTray)
+        if (args.WindowActivationState != WindowActivationState.Deactivated || isHiddenToTray)
         {
             return;
         }
@@ -92,14 +100,6 @@ public sealed partial class SelectorWindow : Window
 #endif
     }
 
-    private void Window_Activated(object sender, WindowActivatedEventArgs args)
-    {
-        if (args.WindowActivationState == WindowActivationState.Deactivated)
-        {
-            Window_Deactivated(sender, EventArgs.Empty);
-        }
-    }
-
     private void SelectorWindow_Closed(object sender, WindowEventArgs args)
     {
         if (!App.IsExiting)
@@ -109,35 +109,11 @@ public sealed partial class SelectorWindow : Window
             return;
         }
 
-        ViewModel.CancelIconLoading();
         settingsService.SettingsChanged -= SettingsChanged;
+        ViewModel.CancelIconLoading();
         ViewModel.BrowserLaunched -= ViewModel_BrowserLaunched;
+        ViewModel.PropertyChanged -= ViewModel_PropertyChanged;
         Activated -= Window_Activated;
-        windowMessageMonitor.WindowMessageReceived -= WindowMessageReceived;
-        windowMessageMonitor.Dispose();
-    }
-
-    private void PositionWindowUnderTheMouse()
-    {
-        try
-        {
-            if (!ViewModel.AppSettings.LaunchUnderMouse)
-            {
-                return;
-            }
-
-            var (width, height) = GetConfiguredWindowSize();
-            var scale = (Content as FrameworkElement)?.XamlRoot?.RasterizationScale ?? 1.0;
-            var position = CursorPosition.LimitCursorWithin(
-                (int)Math.Round(width * scale),
-                (int)Math.Round(height * scale));
-
-            this.MoveAndResize(position.X / scale, position.Y / scale, width, height);
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine(ex);
-        }
     }
     #endregion
 
@@ -145,91 +121,202 @@ public sealed partial class SelectorWindow : Window
     internal void MinimizeWindow()
     {
         isHiddenToTray = true;
-        this.Minimize();
-        this.Hide();
+        EditUrlFlyout.Hide();
+        HubMenu.Hide();
+        AppWindow.Hide();
     }
 
     public void ShowWindow()
     {
         isHiddenToTray = false;
-        this.Show();
-        this.Restore();
-        PositionWindowUnderTheMouse();
+        SetHighlightedItem(null, false);
+        var bounds = CursorPosition.SquareCenteredOnCursor(RadialMetrics.For(ViewModel.Browsers.Count).WindowSize);
+        AppWindow.MoveAndResize(bounds);
+        AppWindow.Show();
+        // Moving onto a monitor with another DPI can rescale the window, so place it again once it is shown there.
+        AppWindow.MoveAndResize(bounds);
+        ApplyCircularRegion();
         Activate();
         this.SetForegroundWindow();
+        HubButton.Focus(FocusState.Programmatic);
+        PlayOpenAnimation();
     }
 
-    private void ApplyConfiguredBackground()
+    private void ResizeAroundCenter()
     {
-        string? backgroundType = ViewModel.AppSettings.BackgroundType?.ToLowerInvariant();
-        if (backgroundType == "acrylic")
+        if (isHiddenToTray)
         {
-            if (SystemBackdrop is not DesktopAcrylicBackdrop)
-            {
-                SystemBackdrop = new DesktopAcrylicBackdrop();
-            }
+            return;
         }
-        else if (SystemBackdrop is not MicaBackdrop)
+
+        var current = AppWindow.Position;
+        var size = AppWindow.Size;
+        double scale = DiscRoot.XamlRoot?.RasterizationScale ?? 1.0;
+        int newSize = (int)Math.Round(RadialMetrics.For(ViewModel.Browsers.Count).WindowSize * scale);
+        AppWindow.MoveAndResize(new RectInt32(
+            current.X + (size.Width - newSize) / 2,
+            current.Y + (size.Height - newSize) / 2,
+            newSize,
+            newSize));
+        ApplyCircularRegion();
+    }
+
+    /// <summary>
+    /// Clips the window to a circle. Clicks outside it reach the windows below, and the acrylic backdrop forms the disc.
+    /// </summary>
+    private void ApplyCircularRegion()
+    {
+        var size = AppWindow.Size;
+        IntPtr region = CreateEllipticRgn(0, 0, size.Width + 1, size.Height + 1);
+        if (region != IntPtr.Zero && SetWindowRgn(hwnd, region, true) == 0)
         {
-            SystemBackdrop = new MicaBackdrop();
+            DeleteObject(region);
         }
     }
 
-    private void ApplyConfiguredWindowSize()
+    private void PlayOpenAnimation()
     {
-        var (width, height) = GetConfiguredWindowSize();
-        this.SetWindowSize(width, height);
+        if (!AnimationSettings.AnimationsEnabled)
+        {
+            return;
+        }
+
+        foreach (UIElement element in new UIElement[] { BrowserRing, HubButton })
+        {
+            var visual = ElementCompositionPreview.GetElementVisual(element);
+            var compositor = visual.Compositor;
+            var easing = compositor.CreateCubicBezierEasingFunction(new Vector2(0.16f, 1f), new Vector2(0.3f, 1f));
+            visual.CenterPoint = new Vector3((float)element.ActualSize.X / 2, (float)element.ActualSize.Y / 2, 0);
+
+            var scale = compositor.CreateVector3KeyFrameAnimation();
+            scale.InsertKeyFrame(0f, new Vector3(0.82f, 0.82f, 1));
+            scale.InsertKeyFrame(1f, Vector3.One, easing);
+            scale.Duration = OpenAnimationDuration;
+
+            var opacity = compositor.CreateScalarKeyFrameAnimation();
+            opacity.InsertKeyFrame(0f, 0f);
+            opacity.InsertKeyFrame(1f, 1f, easing);
+            opacity.Duration = OpenAnimationDuration;
+
+            visual.StartAnimation("Scale", scale);
+            visual.StartAnimation("Opacity", opacity);
+        }
+    }
+    #endregion
+
+    #region Hub
+    private void UpdateHub()
+    {
+        string host = GetDisplayHost(ViewModel.Url);
+        if (highlightedItem?.BrowserItem is { } browser)
+        {
+            HubTitle.Text = browser.Name;
+            HubSubtitle.Text = host;
+        }
+        else
+        {
+            HubTitle.Text = string.IsNullOrEmpty(host) ? Constants.NAME : host;
+            HubSubtitle.Text = "Pick a browser";
+        }
     }
 
-    private (double Width, double Height) GetConfiguredWindowSize()
+    private static string GetDisplayHost(string? url)
     {
-        var windowSize = ViewModel.AppSettings.WindowSize;
-        double width = windowSize is { Length: >= 1 } ? windowSize[0] : 500;
-        double height = windowSize is { Length: >= 2 } ? windowSize[1] : 260;
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return string.Empty;
+        }
 
-        width = Math.Max(width, windowManager?.MinWidth ?? 500);
-        height = Math.Max(height, windowManager?.MinHeight ?? 260);
-        return (width, height);
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && !string.IsNullOrEmpty(uri.Host))
+        {
+            return uri.Host.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ? uri.Host[4..] : uri.Host;
+        }
+
+        return url;
     }
 
+    private void SetHighlightedItem(RadialBrowserItem? item, bool highlighted)
+    {
+        if (highlighted)
+        {
+            highlightedItem = item;
+        }
+        else if (item is null || ReferenceEquals(highlightedItem, item))
+        {
+            highlightedItem = null;
+        }
+
+        UpdateHub();
+    }
+
+    private void HubMenu_Opening(object sender, object e)
+    {
+        QuickViewMenuItem.IsEnabled = quickViewService.IsQuickViewEnabled;
+    }
     #endregion
 
     #region Selector UI Event Handlers
-    private void WindowMessageReceived(object? sender, WindowMessageEventArgs e)
+    private void BrowserRing_ElementPrepared(ItemsRepeater sender, ItemsRepeaterElementPreparedEventArgs args)
     {
-        const uint WM_EXITSIZEMOVE = 0x0232;
-        // Save once the user finishes resizing
-        if (e.Message.MessageId != WM_EXITSIZEMOVE
-            || isHiddenToTray || windowManager is null)
+        if (args.Element is not RadialBrowserItem item)
         {
             return;
         }
 
-        int width = (int)Math.Round(Math.Max(windowManager.Width, windowManager.MinWidth));
-        int height = (int)Math.Round(Math.Max(windowManager.Height, windowManager.MinHeight));
-        var appSettings = settingsService.LoadSettings().AppSettings;
-        if (appSettings.WindowSize is { Length: 2 } size && size[0] == width && size[1] == height)
-        {
-            return;
-        }
+        item.ShortcutNumber = args.Index + 1;
+        item.LaunchRequested -= BrowserItem_LaunchRequested;
+        item.LaunchRequested += BrowserItem_LaunchRequested;
+        item.AlternateLaunchRequested -= BrowserItem_AlternateLaunchRequested;
+        item.AlternateLaunchRequested += BrowserItem_AlternateLaunchRequested;
+        item.HighlightChanged -= BrowserItem_HighlightChanged;
+        item.HighlightChanged += BrowserItem_HighlightChanged;
+    }
 
+    private void BrowserItem_LaunchRequested(object? sender, BrowserItemViewModel e) => ViewModel.LaunchBrowserCommand.Execute(e);
+
+    private void BrowserItem_HighlightChanged(object? sender, bool highlighted) => SetHighlightedItem(sender as RadialBrowserItem, highlighted);
+
+    private void BrowserItem_AlternateLaunchRequested(object? sender, AlternateLaunchRequestedEventArgs e)
+    {
         try
         {
-            isSavingWindowSize = true;
-            appSettings.WindowSize = [width, height];
-            settingsService.UpdateAppSettings(appSettings);
+            UriLauncher.Alternative(ViewModel.Url, e.Browser, e.AlternateLaunch);
+            MinimizeWindow();
         }
         catch (Exception ex)
         {
             Debug.WriteLine(ex);
         }
-        finally
-        {
-            isSavingWindowSize = false;
-        }
     }
 
     private void ViewModel_BrowserLaunched(object? sender, EventArgs e) => MinimizeWindow();
+
+    private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(SelectorPageViewModel.Url))
+        {
+            UpdateHub();
+        }
+        else if (e.PropertyName == nameof(SelectorPageViewModel.Browsers))
+        {
+            highlightedItem = null;
+            UpdateHub();
+            ResizeAroundCenter();
+        }
+    }
+
+    private void SettingsChanged(object? sender, SettingsChangedEventArgs e)
+    {
+        if (e.Section.HasFlag(SettingsSection.AppSettings))
+        {
+            ViewModel.RefreshAppSettings();
+        }
+
+        if (e.Section.HasFlag(SettingsSection.Browsers))
+        {
+            ViewModel.RefreshBrowsers();
+        }
+    }
 
     private void LinkCopyBtnClick(object sender, RoutedEventArgs e)
     {
@@ -243,45 +330,11 @@ public sealed partial class SelectorWindow : Window
         }
     }
 
-    private void SettingsChanged(object? sender, SettingsChangedEventArgs e)
-    {
-        if (e.Section.HasFlag(SettingsSection.AppSettings) && !isSavingWindowSize)
-        {
-            ViewModel.RefreshAppSettings();
-            ApplyConfiguredBackground();
-            ApplyConfiguredWindowSize();
-        }
-        if (e.Section.HasFlag(SettingsSection.QuickView))
-        {
-            QuickViewButton.IsEnabled = quickViewService.IsQuickViewEnabled;
-        }
-        if (e.Section.HasFlag(SettingsSection.Browsers))
-        {
-            ViewModel.RefreshBrowsers();
-        }
-    }
+    private void EditUrlBtnClick(object sender, RoutedEventArgs e) => ShowEditUrlFlyout();
 
     private void SettingsBtnClick(object sender, RoutedEventArgs e) => App.ShowSettings("settings");
 
-    private void CloseBtnClick(object sender, RoutedEventArgs e) => MinimizeWindow();
-
-    private void Button_Click_1(object sender, RoutedEventArgs e)
-    {
-        App.ShowSettings("rulesets");
-    }
-
-    private void BrowserBarButton_AlternateLaunchRequested(object? sender, AlternateLaunchRequestedEventArgs e)
-    {
-        try
-        {
-            UriLauncher.Alternative(ViewModel.Url, e.Browser, e.AlternateLaunch);
-            MinimizeWindow();
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine(ex);
-        }
-    }
+    private void RulesBtnClick(object sender, RoutedEventArgs e) => App.ShowSettings("rulesets");
 
     private void QuickViewBtnClick(object sender, RoutedEventArgs e)
     {
@@ -290,9 +343,114 @@ public sealed partial class SelectorWindow : Window
             MinimizeWindow();
         }
     }
+
+    private void UrlTextBox_KeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key == VirtualKey.Enter)
+        {
+            EditUrlFlyout.Hide();
+            e.Handled = true;
+        }
+    }
+
+    private void EditUrlFlyout_Closed(object sender, object e)
+    {
+        if (!isHiddenToTray)
+        {
+            HubButton.Focus(FocusState.Programmatic);
+        }
+    }
+
+    private void ShowEditUrlFlyout()
+    {
+        FlyoutBase.ShowAttachedFlyout(DiscRoot);
+        UrlTextBox.Focus(FocusState.Keyboard);
+        UrlTextBox.SelectAll();
+    }
     #endregion
 
-    #region Keyboard Accelerators
+    #region Keyboard
+    private void DiscRoot_PreviewKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (IsTextBoxKeyAccelerator() || IsModifierDown())
+        {
+            return;
+        }
+
+        int count = ViewModel.Browsers.Count;
+        int? number = e.Key switch
+        {
+            >= VirtualKey.Number1 and <= VirtualKey.Number9 => e.Key - VirtualKey.Number1,
+            >= VirtualKey.NumberPad1 and <= VirtualKey.NumberPad9 => e.Key - VirtualKey.NumberPad1,
+            _ => null
+        };
+        if (number is int index)
+        {
+            if (index < count)
+            {
+                ViewModel.LaunchBrowserCommand.Execute(ViewModel.Browsers[index]);
+            }
+
+            e.Handled = true;
+            return;
+        }
+
+        int step = e.Key switch
+        {
+            VirtualKey.Right or VirtualKey.Down => 1,
+            VirtualKey.Left or VirtualKey.Up => -1,
+            _ => 0
+        };
+        if (step == 0 || count == 0)
+        {
+            return;
+        }
+
+        int focused = GetFocusedItemIndex();
+        int next = focused < 0
+            ? GetItemClosestToDirection(e.Key, count)
+            : ((focused + step) % count + count) % count;
+        (BrowserRing.TryGetElement(next) as RadialBrowserItem)?.FocusItem();
+        e.Handled = true;
+    }
+
+    private int GetFocusedItemIndex()
+    {
+        var focused = DiscRoot.XamlRoot is null ? null : FocusManager.GetFocusedElement(DiscRoot.XamlRoot) as DependencyObject;
+        while (focused is not null and not RadialBrowserItem)
+        {
+            focused = VisualTreeHelper.GetParent(focused);
+        }
+
+        return focused is RadialBrowserItem item ? BrowserRing.GetElementIndex(item) : -1;
+    }
+
+    private static int GetItemClosestToDirection(VirtualKey key, int count)
+    {
+        var target = key switch
+        {
+            VirtualKey.Up => new global::Windows.Foundation.Point(0, -1),
+            VirtualKey.Down => new global::Windows.Foundation.Point(0, 1),
+            VirtualKey.Left => new global::Windows.Foundation.Point(-1, 0),
+            _ => new global::Windows.Foundation.Point(1, 0)
+        };
+        var metrics = RadialMetrics.For(count);
+        int best = 0;
+        double bestDot = double.MinValue;
+        for (int i = 0; i < count; i++)
+        {
+            var center = metrics.ItemCenter(i, default);
+            double dot = (center.X * target.X + center.Y * target.Y) / metrics.RingRadius;
+            if (dot > bestDot)
+            {
+                bestDot = dot;
+                best = i;
+            }
+        }
+
+        return best;
+    }
+
     private void EscapeAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         MinimizeWindow();
@@ -310,14 +468,14 @@ public sealed partial class SelectorWindow : Window
         args.Handled = true;
     }
 
-    private async void EditUrlAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    private void EditUrlAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         if (IsTextBoxKeyAccelerator())
         {
             return;
         }
 
-        UrlTextBox.Focus(FocusState.Keyboard);
+        ShowEditUrlFlyout();
         args.Handled = true;
     }
 
@@ -334,9 +492,11 @@ public sealed partial class SelectorWindow : Window
 
     private bool IsTextBoxKeyAccelerator()
     {
-        var xamlRoot = (Content as FrameworkElement)?.XamlRoot;
+        var xamlRoot = DiscRoot.XamlRoot;
         return xamlRoot is not null && FocusManager.GetFocusedElement(xamlRoot) is TextBox;
     }
+
+    private static bool IsModifierDown() => KeyboardState.IsCtrlKeyDown() || KeyboardState.IsAltKeyDown();
     #endregion
 
     #region Helper methods
@@ -348,5 +508,14 @@ public sealed partial class SelectorWindow : Window
         Clipboard.Flush();
     }
 
+    [LibraryImport("gdi32.dll")]
+    private static partial IntPtr CreateEllipticRgn(int left, int top, int right, int bottom);
+
+    [LibraryImport("gdi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool DeleteObject(IntPtr hObject);
+
+    [LibraryImport("user32.dll")]
+    private static partial int SetWindowRgn(IntPtr hWnd, IntPtr hRgn, [MarshalAs(UnmanagedType.Bool)] bool bRedraw);
     #endregion
 }

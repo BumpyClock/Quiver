@@ -10,67 +10,48 @@
     mc:Ignorable="d">
 
     <ScrollViewer>
-    <StackPanel MaxWidth="800" Spacing="16">
-        <StackPanel Spacing="4">
-            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Selector Settings" />
+        <StackPanel MaxWidth="800" Spacing="16">
+            <StackPanel Spacing="4">
+                <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Selector Settings" />
 
-            <StackPanel>
-                <toolkit:SettingsCard Header="Launch Under Mouse">
-                    <toolkit:SettingsCard.HeaderIcon>
-                        <FontIcon Glyph="&#xE8B0;" />
-                    </toolkit:SettingsCard.HeaderIcon>
+                <StackPanel>
+                    <toolkit:SettingsCard Description="Close the browser picker when you click outside it" Header="Close on Focus Loss">
+                        <toolkit:SettingsCard.HeaderIcon>
+                            <FontIcon Glyph="&#xE8C5;" />
+                        </toolkit:SettingsCard.HeaderIcon>
 
-                    <ToggleSwitch IsOn="{x:Bind ViewModel.Option_LaunchUnderMouse, Mode=TwoWay}" />
-                </toolkit:SettingsCard>
+                        <ToggleSwitch IsOn="{x:Bind ViewModel.Option_MinimizeOnFocusLoss, Mode=TwoWay}" />
+                    </toolkit:SettingsCard>
+                </StackPanel>
+            </StackPanel>
 
-                <toolkit:SettingsCard Description="Minimize to tray when clicking outside the app window" Header="Minimize on Focus Loss">
-                    <toolkit:SettingsCard.HeaderIcon>
-                        <FontIcon Glyph="&#xE8C5;" />
-                    </toolkit:SettingsCard.HeaderIcon>
+            <StackPanel Spacing="4">
+                <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Other Settings" />
 
-                    <ToggleSwitch IsOn="{x:Bind ViewModel.Option_MinimizeOnFocusLoss, Mode=TwoWay}" />
-                </toolkit:SettingsCard>
-
-                <toolkit:SettingsCard Header="Background Type">
-                    <toolkit:SettingsCard.HeaderIcon>
-                        <FontIcon Glyph="&#xE790;" />
-                    </toolkit:SettingsCard.HeaderIcon>
-
-                    <ComboBox SelectedIndex="{x:Bind ViewModel.Option_BackgroundType, Mode=TwoWay}">
-                        <ComboBoxItem Content="Mica" />
-                        <ComboBoxItem Content="Acrylic" />
-                    </ComboBox>
-                </toolkit:SettingsCard>
+                <StackPanel>
+                    <toolkit:SettingsCard
+                        Click="DefaultAppButton_Click"
+                        Description="Set Quiver as the default browser app"
+                        Header="Windows default app settings"
+                        IsClickEnabled="True">
+                        <toolkit:SettingsCard.HeaderIcon>
+                            <FontIcon Glyph="&#xECAA;" />
+                        </toolkit:SettingsCard.HeaderIcon>
+                    </toolkit:SettingsCard>
+                    <toolkit:SettingsCard Header="Edit the settings file" IsClickEnabled="True">
+                        <toolkit:SettingsCard.HeaderIcon>
+                            <FontIcon Glyph="&#xE943;" />
+                        </toolkit:SettingsCard.HeaderIcon>
+                        <Button
+                            Width="80"
+                            Click="EditJsonButton_Click"
+                            Style="{StaticResource AccentButtonStyle}">
+                            Edit
+                        </Button>
+                    </toolkit:SettingsCard>
+                </StackPanel>
             </StackPanel>
         </StackPanel>
-
-        <StackPanel Spacing="4">
-            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Other Settings" />
-
-            <StackPanel>
-                <toolkit:SettingsCard
-                    Click="DefaultAppButton_Click"
-                    Description="Set Quiver as the default browser app"
-                    Header="Windows default app settings"
-                    IsClickEnabled="True">
-                    <toolkit:SettingsCard.HeaderIcon>
-                        <FontIcon Glyph="&#xECAA;" />
-                    </toolkit:SettingsCard.HeaderIcon>
-                </toolkit:SettingsCard>
-                <toolkit:SettingsCard Header="Edit the settings file" IsClickEnabled="True">
-                    <toolkit:SettingsCard.HeaderIcon>
-                        <FontIcon Glyph="&#xE943;" />
-                    </toolkit:SettingsCard.HeaderIcon>
-                    <Button
-                        Width="80"
-                        Click="EditJsonButton_Click"
-                        Style="{StaticResource AccentButtonStyle}">
-                        Edit
-                    </Button>
-                </toolkit:SettingsCard>
-            </StackPanel>
-        </StackPanel>
-    </StackPanel>
     </ScrollViewer>
 
 </Page>

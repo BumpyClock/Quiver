@@ -80,31 +80,15 @@
     "AppSettings": {
       "type": "object",
       "properties": {
-        "LaunchUnderMouse": {
+        "MinimizeOnFocusLoss": {
           "type": "boolean",
-          "description": "If true, the browser will be launched under the mouse cursor."
+          "description": "Hide the picker when it loses focus.",
+          "default": true
         },
         "RuleMatching": {
           "type": "boolean",
-          "description": "If true, Enables Rule Matching feature with the rules defined in the 'Rulesets' Property."
-        },
-        "BackgroundType": {
-          "type": "string",
-          "description": "The type of background to use for the browser window.",
-          "enum": ["mica", "acrylic"],
-          "default": "mica"
-        },
-        "WindowSize": {
-          "type": "array",
-          "description": "The size of the Quiver browser selector window. define as an array of two integers for width and height.",
-          "items": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "integer"
-            }
-          ]
+          "description": "Enable automatic browser selection using the configured rulesets.",
+          "default": false
         }
       }
     },

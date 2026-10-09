@@ -13,11 +13,8 @@ When Quiver is launched for the first time, it automatically detects the install
 ```json
 {
   "AppSettings": {
-    "LaunchUnderMouse": false,
     "MinimizeOnFocusLoss": true,
-    "BackgroundType": "mica",
-    "RuleMatching": false,
-    "WindowSize": [500, 260]
+    "RuleMatching": false
   },
   "Browsers": [
     {
@@ -53,18 +50,14 @@ The following snippet shows the default options:
 
 ```json
 "AppSettings": {
-    "LaunchUnderMouse": false,
     "MinimizeOnFocusLoss": true,
-    "BackgroundType": "mica",
-    "RuleMatching": false,
-    "WindowSize": [460,230]
+    "RuleMatching": false
 }
 ```
 
 ### Available options
 
-- `LaunchUnderMouse` default is **false**, can be used to launch the Quiver window under the mouse when enabled
-- `MinimizeOnFocusLoss` default is **true**
-- `BackgroundType` supports **mica** (default) and **acrylic** for the selector window.
+- `MinimizeOnFocusLoss` defaults to **true** and hides the picker when you click outside it.
 - `RuleMatching` defaults to **false**. Enable it in **Quiver Settings > Rulesets** to automatically open links using [rule matching](./Features/RuleMatching.md).
-- `WindowSize` stores the selector's width and height, defaults to **[500, 260]**, and is saved when you finish resizing the window. The minimum size is also 500 by 260.
+
+The radial picker opens near the cursor and sizes itself to fit its browser choices. Legacy "LaunchUnderMouse", "BackgroundType", and "WindowSize" values are ignored.

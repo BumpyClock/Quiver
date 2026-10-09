@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<UserControl
+    x:Class="Quiver.App.Controls.RadialBrowserItem"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Width="60"
+    Height="60"
+    mc:Ignorable="d">
+
+    <Grid x:Name="ItemRoot">
+        <Button
+            x:Name="LaunchButton"
+            Padding="0"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch"
+            AutomationProperties.Name="{x:Bind BrowserItem.Name, Mode=OneWay}"
+            BorderThickness="1.5"
+            Click="LaunchButton_Click"
+            CornerRadius="30"
+            GotFocus="LaunchButton_GotFocus"
+            LostFocus="LaunchButton_LostFocus"
+            PointerEntered="LaunchButton_PointerEntered"
+            PointerExited="LaunchButton_PointerExited"
+            ToolTipService.ToolTip="{x:Bind ToolTipText, Mode=OneWay}">
+            <Button.Resources>
+                <ResourceDictionary>
+                    <ResourceDictionary.ThemeDictionaries>
+                        <ResourceDictionary x:Key="Default">
+                            <StaticResource x:Key="ButtonBackground" ResourceKey="ControlFillColorDefaultBrush" />
+                            <StaticResource x:Key="ButtonBorderBrush" ResourceKey="ControlStrokeColorDefaultBrush" />
+                            <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="AccentFillColorDefaultBrush" />
+                            <StaticResource x:Key="ButtonBorderBrushPressed" ResourceKey="AccentFillColorSecondaryBrush" />
+                        </ResourceDictionary>
+                        <ResourceDictionary x:Key="Light">
+                            <StaticResource x:Key="ButtonBackground" ResourceKey="ControlFillColorDefaultBrush" />
+                            <StaticResource x:Key="ButtonBorderBrush" ResourceKey="ControlStrokeColorDefaultBrush" />
+                            <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="AccentFillColorDefaultBrush" />
+                            <StaticResource x:Key="ButtonBorderBrushPressed" ResourceKey="AccentFillColorSecondaryBrush" />
+                        </ResourceDictionary>
+                        <ResourceDictionary x:Key="HighContrast">
+                            <StaticResource x:Key="ButtonBackground" ResourceKey="SystemControlBackgroundBaseLowBrush" />
+                            <StaticResource x:Key="ButtonBorderBrush" ResourceKey="SystemControlForegroundTransparentBrush" />
+                            <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="SystemColorHighlightColorBrush" />
+                            <StaticResource x:Key="ButtonBorderBrushPressed" ResourceKey="SystemColorHighlightTextColorBrush" />
+                        </ResourceDictionary>
+                    </ResourceDictionary.ThemeDictionaries>
+                </ResourceDictionary>
+            </Button.Resources>
+            <Image
+                Width="34"
+                Height="34"
+                Source="{x:Bind BrowserItem.Icon, Mode=OneWay}" />
+        </Button>
+        <Border
+            x:Name="ShortcutBadge"
+            MinWidth="18"
+            Height="18"
+            Margin="0,0,-2,-2"
+            Padding="4,0"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Bottom"
+            Background="{ThemeResource SolidBackgroundFillColorTertiaryBrush}"
+            BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+            BorderThickness="1"
+            CornerRadius="9"
+            IsHitTestVisible="False"
+            Visibility="{x:Bind ShortcutVisibility, Mode=OneWay}">
+            <TextBlock
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                FontSize="10"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Text="{x:Bind ShortcutNumber, Mode=OneWay}" />
+        </Border>
+    </Grid>
+</UserControl>
