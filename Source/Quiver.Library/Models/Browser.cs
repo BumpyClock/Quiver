@@ -1,0 +1,59 @@
+using CommunityToolkit.Mvvm.ComponentModel;
+using System.Collections.ObjectModel;
+using System.Text.Json.Serialization;
+
+namespace Quiver.Library.Models;
+
+public partial class Browser : ObservableObject
+{
+    public Browser() { }
+
+    public Browser(string Name, string ExePath)
+    {
+        this.Name = Name;
+        this.ExePath = ExePath;
+    }
+
+    [ObservableProperty]
+    public partial Guid Id { get; set; } = Guid.NewGuid();
+
+    [ObservableProperty]
+    public partial string Name { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string ExePath { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string? LaunchArgs { get; set; }
+
+    [ObservableProperty]
+    public partial ObservableCollection<AlternateLaunch>? AlternateLaunches { get; set; }
+
+    [ObservableProperty]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public partial BrowserIcon? Icon { get; set; }
+
+    [ObservableProperty]
+    [field: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public partial bool Hidden { get; set; } = false;
+}
+
+public partial class AlternateLaunch : ObservableObject
+{
+    public AlternateLaunch() { }
+
+    public AlternateLaunch(string itemName, string launchArgs)
+    {
+        ItemName = itemName;
+        LaunchArgs = launchArgs;
+    }
+
+    [ObservableProperty]
+    public partial Guid Id { get; set; } = Guid.NewGuid();
+
+    [ObservableProperty]
+    public partial string ItemName { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string LaunchArgs { get; set; } = string.Empty;
+}

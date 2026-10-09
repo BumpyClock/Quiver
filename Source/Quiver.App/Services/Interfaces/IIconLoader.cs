@@ -1,0 +1,16 @@
+using Quiver.Library.Models;
+using Microsoft.UI.Xaml.Media.Imaging;
+using System.Threading.Tasks;
+
+namespace Quiver.App.Services.Interfaces;
+
+public interface IIconLoader
+{
+    Task<BitmapImage?> LoadIconAsync(Browser browser);
+    Task<BitmapImage?> LoadIconFromExe(string exePath);
+    Task<BitmapImage?> LoadIconFromExe(string exePath, int iconIndex);
+    Task<int> GetExeIconCountAsync(string exePath);
+    Task<BitmapImage?> LoadIconFromIco(string icoPath);
+    Task<BitmapImage?> LoadIconFromImage(string imagePath);
+    Task<BitmapImage?> LoadIconFromURL(string url);
+}

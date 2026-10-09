@@ -1,39 +1,30 @@
-$EXTENSION_ID = $args[0]
+param(
+  [Parameter(Mandatory = $true)]
+  [string]$ExtensionId,
 
-# Custom path to the directory. Absolute path is required.
-$CURRENT_DIR = $args[1]
-if ($CURRENT_DIR -eq $null) {
-  $CURRENT_DIR = Get-Location
+  # Path to NativeMessagingHost.exe. Defaults to the alias the Store package installs.
+  [string]$HostPath = (Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps\QuiverNativeMessagingHost.exe")
+)
+
+if (-not (Test-Path $HostPath)) {
+  throw "Native messaging host not found at $HostPath. Install Quiver from the Microsoft Store, or pass -HostPath."
 }
-$CURRENT_DIR = "$CURRENT_DIR".Replace('\', '/')
 
-$PATH_TO_NMHOST = "$CURRENT_DIR/nmh-manifest.json"
-Write-Output "Creating Native Messaging Host manifest file at $PATH_TO_NMHOST"
+# The package install folder is read-only, so keep the manifest in a user folder.
+$ManifestDir = Join-Path $env:LOCALAPPDATA "Quiver"
+$ManifestPath = Join-Path $ManifestDir "nmh-manifest.json"
+New-Item -ItemType Directory -Force $ManifestDir | Out-Null
+Write-Output "Creating Native Messaging Host manifest file at $ManifestPath"
 
+$NMH_MANIFEST = [ordered]@{
+  name            = "com.bumpyclock.quiver"
+  description     = "Quiver Proxy Native Messaging Host"
+  path            = $HostPath
+  type            = "stdio"
+  allowed_origins = @("chrome-extension://$ExtensionId/")
+} | ConvertTo-Json
 
-$NMH_MANIFEST = @"
-{
-  "name": "com.3721tools.hurl",
-  "description": "Hurl Proxy Native Messaging Host",
-  "path": "$CURRENT_DIR/NativeMessagingHost.exe",
-  "type": "stdio",
-  "allowed_origins": ["chrome-extension://$EXTENSION_ID/"]
-}
-"@
-
-# $FIREFOX_NMH_MANIFEST = @"
-# {
-#   "name": "com.3721tools.hurl",
-#   "description": "Hurl Proxy Native Messaging Host",
-#   "path": "$CURRENT_DIR/NativeMessagingHost.exe",
-#   "type": "stdio",
-#   "allowed_extensions": ["chrome-extension://$EXTENSION_ID/"]
-# }
-# "@
-
-$NMH_MANIFEST | Out-File -FilePath $PATH_TO_NMHOST -Encoding utf8
+$NMH_MANIFEST | Out-File -FilePath $ManifestPath -Encoding utf8
 
 $REG_PATH = "HKCU\Software\Google\Chrome\NativeMessagingHosts"
-# $FIREFOX_REG_PATH = "HKCU\Software\Mozilla\NativeMessagingHosts"
-
-REG ADD "$REG_PATH\com.3721tools.hurl" /ve /t REG_SZ /d "$PATH_TO_NMHOST" /f
+REG ADD "$REG_PATH\com.bumpyclock.quiver" /ve /t REG_SZ /d "$ManifestPath" /f

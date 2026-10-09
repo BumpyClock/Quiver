@@ -1,4 +1,4 @@
-<!-- Shared props for WinUI native AOT unpackaged projects -->
+<!-- Shared props for WinUI native AOT MSIX-packaged projects -->
 <Project>
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -9,7 +9,7 @@
     <Nullable>enable</Nullable>
 
     <EnableMsixTooling>true</EnableMsixTooling>
-    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsPackageType>MSIX</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
 
     <WindowsSdkPackageVersion>10.0.26100.56</WindowsSdkPackageVersion>

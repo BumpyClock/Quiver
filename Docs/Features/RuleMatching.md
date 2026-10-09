@@ -3,12 +3,12 @@
 ## What are rules?
 
 Rules match incoming URLs and automatically open the associated browser or launch profile, skipping you a
-selection step. Enable **Rule Matching** in **Hurl Settings > Rulesets**, or set
+selection step. Enable **Rule Matching** in **Quiver Settings > Rulesets**, or set
 `AppSettings.RuleMatching` to `true`. It is disabled by default, adding rules alone does not enable it.
 
 ## Current Behavior on rule trigger
 
-Hurl checks rules when a URL is passed to the app. The first matching ruleset wins. If no rule matches,
+Quiver checks rules when a URL is passed to the app. The first matching ruleset wins. If no rule matches,
 the selector opens. Holding the [Quick View shortcut](../README.md#quick-view-settings) takes precedence
 over rules.
 
@@ -16,7 +16,7 @@ over rules.
 
 - `String`: Matches the entire URL exactly and is case-sensitive. Differences in the scheme, path casing, query string, or trailing slash prevent a match.
 - `Domain`: Simply the domain part of a URL,
-  - example: For the URL `https://github.com/u-c-s/hurl`, `github.com` is the domain.
+  - example: For the URL `https://github.com/u-c-s/quiver`, `github.com` is the domain.
   - Probably the most useful rule type. By default it matches the host exactly, so `github.com` will not match `docs.github.com`.
   - To also match subdomains, prefix the domain with `*.` — a rule of `*.github.com` matches `github.com` itself
     as well as any subdomain such as `docs.github.com`.
@@ -27,7 +27,7 @@ over rules.
 > [!NOTE]
 > String and regex rules are matched against the URL including its scheme, such as `https://`.
 > Domain rules contain only the host, without a scheme, path, or port, and compare it case-insensitively.
-> Domain matching requires an absolute URL such as `https://github.com/u-c-s/hurl`.
+> Domain matching requires an absolute URL such as `https://github.com/u-c-s/quiver`.
 
 ## What about rulesets?
 
@@ -109,4 +109,4 @@ Note that when adding rules to _UserSettings.json_ directly, follow the below pa
 
 - The table shows rule strings before JSON escaping. In JSON, escape each backslash as `\\`, as in the sample above.
 - Only a leading `d$`, `r$`, or `s$` is interpreted as a rule-type prefix. Other `$` characters are preserved, so an unprefixed URL such as `https://example.com/$value` works as an exact-string rule.
-- When using the UI, choose the rule type and enter the pattern without a type prefix; Hurl adds it when saving.
+- When using the UI, choose the rule type and enter the pattern without a type prefix; Quiver adds it when saving.

@@ -1,6 +1,6 @@
-# Hurl browser extension
+# Quiver browser extension
 
-This browser extension uses Native Messaging API to communicate with the Hurl Application.
+This browser extension uses Native Messaging API to communicate with the Quiver Application.
 
 ## Installation
 
@@ -8,15 +8,16 @@ To use it in Chrome, follow the steps below:
 
 - Enable the Developer Mode for Extensions in Chrome ([instructions on Chromium blog](https://blog.chromium.org/2009/06/developer-tools-for-google-chrome.html))
 - Select **Load Unpacked**
-- Choose the folder `{installationDir}/Extensions/Chrome`
+- Choose the folder `Extensions/Chrome` from a checkout of this repository
 
-Run the `install-nmh.ps1` script as admin located in `{installationDir}/Extensions` after installing the extension. Also get the extension id from the extension page in Chrome.
+Then run `install-nmh.ps1` with the extension id from the extension page in Chrome. The Store package installs the native messaging host as the `QuiverNativeMessagingHost.exe` app execution alias, and the script points Chrome at it by default.
 
 ```powershell
-cd {installationDir}
-.\Extensions\install-nmh.ps1 {EXTENSION_ID} {<optional> dir_where_NativeMessagingHost.exe_is}
+.\Extensions\install-nmh.ps1 -ExtensionId {EXTENSION_ID}
 ```
+
+The script writes `nmh-manifest.json` to `%LOCALAPPDATA%\Quiver` and registers it under `HKCU`; it does not need admin rights.
 
 You can modify the script to use it for other chromium-based browsers by editing the REG command in it and pointing to appropriate browser's registry key for Native Messaging Hosts.
 
-During **Development**, use the `dir_where_NativeMessagingHost.exe_is` to point to the directory where the _NativeMessagingHost.exe_ is located (usually `target/debug`).
+During **Development**, deploy the package from Visual Studio (the `Quiver.App (Package)` profile) and run the script without `-HostPath`. The host starts the _Quiver.exe_ in its own folder, so a host run from `target/` cannot open links.

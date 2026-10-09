@@ -19,22 +19,24 @@ jobs:
           ref: main
       - name: rustup toolchain install
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc,aarch64-pc-windows-msvc
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
-      - name: Build Hurl and its components
+      - name: Build Quiver MSIX bundle
         run: .\build.ps1
       - name: Create Github Release
         shell: pwsh
         run: |
           $commit = git rev-parse HEAD
-          gh release create "$env:RELEASE_TAG" './Utils/Hurl_Installer.exe' --title "$env:RELEASE_TAG" --draft --latest --generate-notes --target $commit
+          gh release create "$env:RELEASE_TAG" --title "$env:RELEASE_TAG" --draft --latest --generate-notes --target $commit
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           RELEASE_TAG: ${{ inputs.tag }}
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: Hurl_Installer
-          path: ./Utils/Hurl_Installer.exe
+          name: Quiver_msixbundle
+          path: ./_Publish/*.msixbundle

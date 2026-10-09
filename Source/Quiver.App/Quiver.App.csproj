@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="..\WinUIAotApp.Shared.props" />
+  <Import Project="..\Meta.Shared.props" />
+
+  <PropertyGroup>
+    <PackageId>Quiver.App</PackageId>
+    <RootNamespace>Quiver.App</RootNamespace>
+    <Title>Quiver</Title>
+    <AssemblyName>Quiver</AssemblyName>
+    <ApplicationIcon>Assets\internet.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <WebView2EnableCsWinRTProjection>true</WebView2EnableCsWinRTProjection>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.SettingsControls" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Windows.CsWinRT" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.Runtime" />
+    <PackageReference Include="System.CommandLine" />
+    <PackageReference Include="System.Drawing.Common" />
+    <PackageReference Include="WinUIEx" />
+    <Manifest Include="$(ApplicationManifest)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\internet.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Assets\Package\*.png" />
+    <ProjectReference Include="..\Quiver.Library\Quiver.Library.csproj" />
+  </ItemGroup>
+
+  <!-- The MSIX package ships the Rust native messaging host next to Quiver.exe. -->
+  <PropertyGroup>
+    <RustTarget Condition="'$(RuntimeIdentifier)' == 'win-arm64' or '$(Platform)' == 'ARM64'">aarch64-pc-windows-msvc</RustTarget>
+    <RustTarget Condition="'$(RustTarget)' == ''">x86_64-pc-windows-msvc</RustTarget>
+    <NativeMessagingHostPath>$(MSBuildThisFileDirectory)..\..\target\$(RustTarget)\release\NativeMessagingHost.exe</NativeMessagingHostPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="$(NativeMessagingHostPath)" Link="NativeMessagingHost.exe" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <Target Name="EnsureNativeMessagingHost" BeforeTargets="BeforeBuild" Condition="!Exists('$(NativeMessagingHostPath)')">
+    <Error Text="NativeMessagingHost.exe not found at $(NativeMessagingHostPath). Run: cargo build --release --target $(RustTarget)" />
+  </Target>
+
+</Project>

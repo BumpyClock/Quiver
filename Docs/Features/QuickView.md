@@ -1,10 +1,10 @@
 # Quick View
 
-Quick View is enabled by default. Hold **Alt** while opening an HTTP or HTTPS link through Hurl to open it in
+Quick View is enabled by default. Hold **Alt** while opening an HTTP or HTTPS link through Quiver to open it in
 the built-in Edge WebView2 window. You can also use the **Quick View** button beside the URL text box in the
 selector. A successful Quick View shortcut takes precedence over rule matching.
 
-Configure it in **Hurl Settings > Quick View**, or add the following top-level property to `UserSettings.json`:
+Configure it in **Quiver Settings > Quick View**, or add the following top-level property to `UserSettings.json`:
 
 ```json
 {
@@ -30,5 +30,5 @@ Configure it in **Hurl Settings > Quick View**, or add the following top-level p
 
 ### WebView2 Configuration
 - `AdditionalBrowserArguments` and `BrowserExtensionsEnabled` configure the WebView2 environment.
-  Restart Hurl after changing them if you have already opened a Quick View window.
+  Restart Quiver after changing them if you have already opened a Quick View window.
 - `TrackingPrevention` supports `None`, `Basic`, `Balanced` (default), or `Strict` for the WebView2 profile.

@@ -2,20 +2,20 @@
 
 chrome.runtime.onInstalled.addListener(function () {
   chrome.contextMenus.create({
-    title: "Hurl the Page",
+    title: "Quiver the Page",
     contexts: ["page"],
-    id: "hurl_page",
+    id: "quiver_page",
   });
 
   chrome.contextMenus.create({
-    title: "Hurl the Link",
+    title: "Quiver the Link",
     contexts: ["link"],
-    id: "hurl_link",
+    id: "quiver_link",
   });
 });
 
 chrome.contextMenus.onClicked.addListener(async (info, _) => {
-  chrome.runtime.sendNativeMessage("com.3721tools.hurl", {
+  chrome.runtime.sendNativeMessage("com.bumpyclock.quiver", {
     url: info.linkUrl || info.pageUrl,
   });
 });

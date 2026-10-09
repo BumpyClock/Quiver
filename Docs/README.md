@@ -6,7 +6,7 @@
 - [Rule Matching](./Features/RuleMatching.md)
 - [Quick View](./Features/QuickView.md)
 
-When Hurl is lauched for the first time, it automatically detects the installed browsers and creates a _UserSettings.json_ file at `C:\Users\{USER}\AppData\Roaming\Hurl` filling it with browsers it detected. A typical UserSettings.json file looks like this:
+When Quiver is launched for the first time, it automatically detects the installed browsers and creates a _UserSettings.json_ file in the package's LocalState folder (`%LOCALAPPDATA%\Packages\<PackageFamilyName>\LocalState\UserSettings.json`), filling it with browsers it detected. The easiest way to open it is **Quiver Settings** > **Settings** page > **edit JSON** button. A typical UserSettings.json file looks like this:
 
 ```json
 {
@@ -61,8 +61,8 @@ The following snippet shows the default options:
 
 ### Available options
 
-- `LaunchUnderMouse` default is **false**, can be used to launch the Hurl window under the mouse when enabled
+- `LaunchUnderMouse` default is **false**, can be used to launch the Quiver window under the mouse when enabled
 - `MinimizeOnFocusLoss` default is **true**
 - `BackgroundType` supports **mica** (default) and **acrylic** for the selector window.
-- `RuleMatching` defaults to **false**. Enable it in **Hurl Settings > Rulesets** to automatically open links using [rule matching](./Features/RuleMatching.md).
+- `RuleMatching` defaults to **false**. Enable it in **Quiver Settings > Rulesets** to automatically open links using [rule matching](./Features/RuleMatching.md).
 - `WindowSize` stores the selector's width and height, defaults to **[500, 260]**, and is saved when you finish resizing the window. The minimum size is also 500 by 260.
