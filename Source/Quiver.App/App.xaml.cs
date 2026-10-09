@@ -77,7 +77,6 @@ public partial class App : Microsoft.UI.Xaml.Application
         RegisterJumpList();
     }
 
-    // Packaged launches only pass arguments through activation, so Settings is a Jump List task rather than a second tile.
     private static async void RegisterJumpList()
     {
         try
@@ -215,7 +214,6 @@ public partial class App : Microsoft.UI.Xaml.Application
             IsExiting = false;
             return;
         }
-        // Restart ends this process before the new one starts, so the new one owns the single-instance key.
         trayService?.Dispose();
         var reason = AppInstance.Restart(string.Empty);
         Debug.WriteLine($"Restart failed: {reason}");

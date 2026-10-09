@@ -46,8 +46,8 @@ Suppose you have multiple chrome profiles like this:
 
 Then you might want to use this feature, instead of totally adding a new browser entity for each profile in
 the settings file. The following snippet demonstrates this feature.
-Adding the `AlternateLaunches` field to the browser entry lets you right-click its icon or use its dropdown
-button in the selector to choose an alternate launch. Add this property to the browser object:
+Adding the `AlternateLaunches` field to the browser entry lets you right-click its icon in the selector to
+choose an alternate launch. The icon's tooltip lists them. Add this property to the browser object:
 
 ```json
 {

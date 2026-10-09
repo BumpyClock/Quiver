@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Input;
 using System;
+using System.Linq;
 using System.Numerics;
 using Windows.UI.ViewManagement;
 
@@ -13,7 +14,7 @@ namespace Quiver.App.Controls;
 
 public sealed partial class RadialBrowserItem : UserControl
 {
-    private const float HighlightScale = 1.12f;
+    private const float HighlightScale = 1.15f;
     private static readonly TimeSpan ScaleAnimationDuration = TimeSpan.FromMilliseconds(140);
     private static readonly UISettings AnimationSettings = new();
 
@@ -27,8 +28,8 @@ public sealed partial class RadialBrowserItem : UserControl
     public RadialBrowserItem()
     {
         InitializeComponent();
-        SizeChanged += (_, _) => ElementCompositionPreview.GetElementVisual(ItemRoot).CenterPoint =
-            new Vector3((float)ActualWidth / 2, (float)ActualHeight / 2, 0);
+        BrowserIcon.SizeChanged += (_, _) => ElementCompositionPreview.GetElementVisual(BrowserIcon).CenterPoint =
+            new Vector3((float)BrowserIcon.ActualWidth / 2, (float)BrowserIcon.ActualHeight / 2, 0);
     }
 
     #region Public API
@@ -45,7 +46,6 @@ public sealed partial class RadialBrowserItem : UserControl
             typeof(RadialBrowserItem),
             new PropertyMetadata(null, OnBrowserItemChanged));
 
-    /// <summary>1-based keyboard shortcut shown on the badge, or 0 for none.</summary>
     public int ShortcutNumber
     {
         get => (int)GetValue(ShortcutNumberProperty);
@@ -67,7 +67,9 @@ public sealed partial class RadialBrowserItem : UserControl
         {
             string name = BrowserItem?.Name ?? string.Empty;
             string shortcut = ShortcutNumber is >= 1 and <= 9 ? $" ({ShortcutNumber})" : string.Empty;
-            string more = BrowserItem?.AlternateLaunches is { Count: > 0 } ? "\nRight-click for more options" : string.Empty;
+            string more = BrowserItem?.AlternateLaunches is { Count: > 0 } launches
+                ? "\nRight-click for " + string.Join(", ", launches.Select(launch => launch.ItemName))
+                : string.Empty;
             return name + shortcut + more;
         }
     }
@@ -75,9 +77,6 @@ public sealed partial class RadialBrowserItem : UserControl
     public event EventHandler<BrowserItemViewModel>? LaunchRequested;
 
     public event EventHandler<AlternateLaunchRequestedEventArgs>? AlternateLaunchRequested;
-
-    /// <summary>Raised when the pointer or keyboard focus enters or leaves the item.</summary>
-    public event EventHandler<bool>? HighlightChanged;
 
     public void FocusItem() => LaunchButton.Focus(FocusState.Keyboard);
     #endregion
@@ -114,7 +113,6 @@ public sealed partial class RadialBrowserItem : UserControl
 
     private void LaunchButton_GotFocus(object sender, RoutedEventArgs e)
     {
-        // Programmatic focus on show should not look like a hover.
         isFocused = LaunchButton.FocusState == FocusState.Keyboard;
         UpdateHighlight();
     }
@@ -159,12 +157,11 @@ public sealed partial class RadialBrowserItem : UserControl
 
         isHighlighted = highlighted;
         AnimateScale(highlighted ? HighlightScale : 1f);
-        HighlightChanged?.Invoke(this, highlighted);
     }
 
     private void AnimateScale(float scale)
     {
-        var visual = ElementCompositionPreview.GetElementVisual(ItemRoot);
+        var visual = ElementCompositionPreview.GetElementVisual(BrowserIcon);
         var target = new Vector3(scale, scale, 1);
         if (!AnimationSettings.AnimationsEnabled)
         {

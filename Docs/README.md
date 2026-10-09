@@ -60,4 +60,12 @@ The following snippet shows the default options:
 - `MinimizeOnFocusLoss` defaults to **true** and hides the picker when you click outside it.
 - `RuleMatching` defaults to **false**. Enable it in **Quiver Settings > Rulesets** to automatically open links using [rule matching](./Features/RuleMatching.md).
 
-The radial picker opens near the cursor and sizes itself to fit its browser choices. Legacy "LaunchUnderMouse", "BackgroundType", and "WindowSize" values are ignored.
+## Using the selector
+
+The selector opens centered on the mouse cursor. Each browser is an acrylic petal around the link in the middle, so every browser is the same short move away. Two browsers sit side by side above the link; three or more are spread evenly around it, starting at the top.
+
+- Click a petal, or press its number (**1**-**9**), to open the link in that browser. Hover a petal to see the browser's name.
+- Right-click a petal to pick one of its [alternate launches](./Features/BrowserConfiguration.md).
+- Use the arrow keys to move between petals and **Enter** to open.
+- Click the link in the middle to copy it (**C**), edit it (**Alt+E**), open it in [Quick View](./Features/QuickView.md), or open **Rules** (**R**) and **Settings**.
+- Press **Esc** or click outside the selector to close it.
