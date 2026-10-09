@@ -68,6 +68,29 @@
                         </DataTemplate>
                     </GridView.ItemTemplate>
                 </GridView>
+                <TextBlock
+                    HorizontalAlignment="Center"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="{x:Bind ViewModel.SelectedExeLabel, Mode=OneWay}"
+                    Visibility="{x:Bind ViewModel.HasSelectedExeIcon, Mode=OneWay}" />
+                <StackPanel HorizontalAlignment="Center" Orientation="Horizontal" Spacing="8">
+                    <Button
+                        Click="LoadPreviousExeIcons_Click"
+                        Content="Previous icons"
+                        IsEnabled="{x:Bind ViewModel.CanLoadPreviousExeIcons, Mode=OneWay}"
+                        Visibility="{x:Bind ViewModel.HasPreviousExeIcons, Mode=OneWay}" />
+                    <Button
+                        Click="LoadMoreExeIcons_Click"
+                        Content="Next icons"
+                        IsEnabled="{x:Bind ViewModel.CanLoadMoreExeIcons, Mode=OneWay}"
+                        Visibility="{x:Bind ViewModel.HasMoreExeIcons, Mode=OneWay}" />
+                    <ProgressRing
+                        Width="20"
+                        Height="20"
+                        AutomationProperties.Name="Loading more icons"
+                        IsActive="{x:Bind ViewModel.IsLoadingExeIcons, Mode=OneWay}"
+                        Visibility="{x:Bind ViewModel.IsLoadingExeIcons, Mode=OneWay}" />
+                </StackPanel>
             </StackPanel>
 
             <Grid RowSpacing="20" Visibility="{x:Bind ImageSourceVisibility(ViewModel.SelectedSource), Mode=OneWay}">

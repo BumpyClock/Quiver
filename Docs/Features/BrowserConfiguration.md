@@ -16,17 +16,17 @@ The settings UI supports creating, editing, deleting, and dragging browser entri
 Click the icon preview beside **Name** and **Executable Path** to open **Select Browser Icon**:
 
 - **Exe Icons** shows the icons embedded in the executable, labeled with their zero-based index. Selecting `icon 0` restores the default.
+- **Next icons** and **Previous icons** browse executable icons 16 at a time. The selected icon stays selected when you change pages.
 - **Local Image** opens a local file picker for ICO, PNG, JPEG, BMP, GIF, or TIFF images. The source file should be available all times.
 - **From URL** loads a direct HTTP(S) image URL. Press Enter or the arrow button to preview it.
 
-Quiver falls back to the executable's default icon if the override cannot be loaded.
+Quiver falls back to the executable's default icon if the override cannot be loaded. Image files and URL responses must be at most 8 MiB. Icons are decoded to fit within 256 × 256 pixels while keeping their proportions.
 
 ### Caching
 
-All images are cached in the `%APPDATA%/Roaming/Quiver/cache/icons`. As of now, the cache is not automatically
-cleared.
+Images are cached in `%LOCALAPPDATA%\Packages\<PackageFamilyName>\LocalState\cache\icons`. The disk cache is limited to 64 MiB, and entries older than 30 days are removed as new icons are cached. Up to 64 decoded images are kept in memory.
 
-The cache will be update automatically if the original file changes versions or the config changes.
+The cache updates when a local source file or icon configuration changes. URL icons refresh after their cached entry expires.
 
 ### Or in the UserSettings.json
 

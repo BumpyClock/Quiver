@@ -77,6 +77,12 @@ public sealed partial class BrowserIconDialog : ContentDialog
 
     private async void LoadUrl_Click(object sender, RoutedEventArgs e) => await ViewModel.LoadUrlAsync();
 
+    private async void LoadMoreExeIcons_Click(object sender, RoutedEventArgs e) =>
+        await ViewModel.LoadMoreExecutableIconsAsync();
+
+    private async void LoadPreviousExeIcons_Click(object sender, RoutedEventArgs e) =>
+        await ViewModel.LoadPreviousExecutableIconsAsync();
+
     private async void UrlInput_KeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (e.Key == VirtualKey.Enter)
