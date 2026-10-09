@@ -10,11 +10,6 @@
     x:Name="SelectorRoot"
     Title="Quiver - Select"
     mc:Ignorable="d">
-    <Window.SystemBackdrop>
-        <DesktopAcrylicBackdrop />
-    </Window.SystemBackdrop>
-
-    <!--  The window is clipped to a circle, so the acrylic backdrop forms the disc.  -->
     <Grid
         x:Name="DiscRoot"
         KeyboardAcceleratorPlacementMode="Hidden"
@@ -29,11 +24,6 @@
             <KeyboardAccelerator Key="Escape" Invoked="EscapeAccelerator_Invoked" />
         </Grid.KeyboardAccelerators>
 
-        <Ellipse
-            Margin="1"
-            IsHitTestVisible="False"
-            Stroke="{ThemeResource SurfaceStrokeColorFlyoutBrush}"
-            StrokeThickness="1.5" />
 
         <ItemsRepeater
             x:Name="BrowserRing"
@@ -54,31 +44,21 @@
 
         <Button
             x:Name="HubButton"
-            Width="112"
-            Height="112"
-            Padding="10"
+            Width="100"
+            Height="100"
+            Padding="8"
             HorizontalAlignment="Center"
             VerticalAlignment="Center"
             AutomationProperties.Name="Link options"
             BorderThickness="1"
-            CornerRadius="56"
+            CornerRadius="50"
             ToolTipService.ToolTip="{x:Bind ViewModel.Url, Mode=OneWay}">
             <Button.Resources>
                 <ResourceDictionary>
-                    <ResourceDictionary.ThemeDictionaries>
-                        <ResourceDictionary x:Key="Default">
-                            <StaticResource x:Key="ButtonBackground" ResourceKey="LayerFillColorDefaultBrush" />
-                            <StaticResource x:Key="ButtonBorderBrush" ResourceKey="CardStrokeColorDefaultBrush" />
-                        </ResourceDictionary>
-                        <ResourceDictionary x:Key="Light">
-                            <StaticResource x:Key="ButtonBackground" ResourceKey="LayerFillColorDefaultBrush" />
-                            <StaticResource x:Key="ButtonBorderBrush" ResourceKey="CardStrokeColorDefaultBrush" />
-                        </ResourceDictionary>
-                        <ResourceDictionary x:Key="HighContrast">
-                            <StaticResource x:Key="ButtonBackground" ResourceKey="SystemControlBackgroundBaseLowBrush" />
-                            <StaticResource x:Key="ButtonBorderBrush" ResourceKey="SystemControlForegroundTransparentBrush" />
-                        </ResourceDictionary>
-                    </ResourceDictionary.ThemeDictionaries>
+                    <StaticResource x:Key="ButtonBackground" ResourceKey="SubtleFillColorTransparentBrush" />
+                    <StaticResource x:Key="ButtonBorderBrush" ResourceKey="SubtleFillColorTransparentBrush" />
+                    <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="SubtleFillColorSecondaryBrush" />
+                    <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="SubtleFillColorTertiaryBrush" />
                 </ResourceDictionary>
             </Button.Resources>
             <Button.Flyout>
@@ -131,6 +111,8 @@
                 <TextBlock
                     x:Name="HubTitle"
                     HorizontalAlignment="Center"
+                    FontSize="13"
+                    FontWeight="SemiBold"
                     MaxLines="2"
                     Style="{StaticResource BodyStrongTextBlockStyle}"
                     TextAlignment="Center"

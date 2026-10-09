@@ -10,10 +10,6 @@ internal static partial class CursorPosition
     private const int MdtEffectiveDpi = 0;
     private const double DefaultDpi = 96;
 
-    /// <summary>
-    /// Returns a square of <paramref name="sizeDips"/> centered on the cursor and kept inside the cursor
-    /// monitor's work area, in physical pixels for that monitor's DPI.
-    /// </summary>
     public static RectInt32 SquareCenteredOnCursor(double sizeDips)
     {
         if (!GetCursorPos(out var cursor))

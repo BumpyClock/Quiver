@@ -12,7 +12,6 @@ public class Constants
     public static string APP_PARENT_DIR = AppContext.BaseDirectory;
     public static string APP_LAUNCH_PATH = Environment.GetCommandLineArgs()[0];
     public static string ROAMING = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-    // Packaged writes to %APPDATA% are virtualized and invisible to Explorer, so use the package's LocalState.
     public static string APP_SETTINGS_DIR = PackageIdentity.IsPackaged ? ApplicationData.Current.LocalFolder.Path : Path.Combine(ROAMING, NAME);
     public static string APP_SETTINGS_MAIN = Path.Combine(APP_SETTINGS_DIR, "UserSettings.json");
 

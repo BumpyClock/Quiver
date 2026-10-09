@@ -13,6 +13,7 @@ using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Numerics;
@@ -38,8 +39,9 @@ public sealed partial class SelectorWindow : Window
     private readonly ISettingsService settingsService;
     private readonly IntPtr hwnd;
 
+    private readonly CircleAcrylicLayer acrylicLayer;
+
     private bool isHiddenToTray = true;
-    private RadialBrowserItem? highlightedItem;
 
     #region Window Lifecycle
     public SelectorWindow()
@@ -52,7 +54,6 @@ public sealed partial class SelectorWindow : Window
         ViewModel.PropertyChanged += ViewModel_PropertyChanged;
         hwnd = WindowNative.GetWindowHandle(this);
 
-        // A borderless, always-on-top popup that stays out of the taskbar and Alt+Tab.
         var presenter = OverlappedPresenter.Create();
         presenter.IsAlwaysOnTop = true;
         presenter.IsMaximizable = false;
@@ -66,6 +67,10 @@ public sealed partial class SelectorWindow : Window
         Closed += SelectorWindow_Closed;
 
         InitializeComponent();
+        SystemBackdrop = new TransparentTintBackdrop();
+        RemoveWindowFrame();
+        acrylicLayer = new CircleAcrylicLayer(hwnd);
+        DiscRoot.ActualThemeChanged += (_, _) => UpdateShape();
         settingsService.SettingsChanged += SettingsChanged;
         UpdateHub();
     }
@@ -114,6 +119,7 @@ public sealed partial class SelectorWindow : Window
         ViewModel.BrowserLaunched -= ViewModel_BrowserLaunched;
         ViewModel.PropertyChanged -= ViewModel_PropertyChanged;
         Activated -= Window_Activated;
+        acrylicLayer.Dispose();
     }
     #endregion
 
@@ -129,13 +135,12 @@ public sealed partial class SelectorWindow : Window
     public void ShowWindow()
     {
         isHiddenToTray = false;
-        SetHighlightedItem(null, false);
         var bounds = CursorPosition.SquareCenteredOnCursor(RadialMetrics.For(ViewModel.Browsers.Count).WindowSize);
         AppWindow.MoveAndResize(bounds);
         AppWindow.Show();
-        // Moving onto a monitor with another DPI can rescale the window, so place it again once it is shown there.
         AppWindow.MoveAndResize(bounds);
-        ApplyCircularRegion();
+        UpdateShape();
+        SetWindowPos(hwnd, HwndTopmost, 0, 0, 0, 0, SwpNoMove | SwpNoSize);
         Activate();
         this.SetForegroundWindow();
         HubButton.Focus(FocusState.Programmatic);
@@ -158,20 +163,50 @@ public sealed partial class SelectorWindow : Window
             current.Y + (size.Height - newSize) / 2,
             newSize,
             newSize));
-        ApplyCircularRegion();
+        UpdateShape();
     }
 
-    /// <summary>
-    /// Clips the window to a circle. Clicks outside it reach the windows below, and the acrylic backdrop forms the disc.
-    /// </summary>
-    private void ApplyCircularRegion()
+    private void UpdateShape()
     {
         var size = AppWindow.Size;
-        IntPtr region = CreateEllipticRgn(0, 0, size.Width + 1, size.Height + 1);
-        if (region != IntPtr.Zero && SetWindowRgn(hwnd, region, true) == 0)
+        var metrics = RadialMetrics.For(ViewModel.Browsers.Count);
+        float scale = (float)(size.Width / metrics.WindowSize);
+        var center = new Vector2(size.Width / 2f, size.Height / 2f);
+
+        var circles = new List<(Vector2 Center, float Radius)>(metrics.Count + 1)
+        {
+            (center, (float)RadialMetrics.HubRadius * scale)
+        };
+        for (int i = 0; i < metrics.Count; i++)
+        {
+            var point = metrics.ItemCenter(i, default);
+            circles.Add((center + new Vector2((float)point.X, (float)point.Y) * scale, (float)(RadialMetrics.ItemSize / 2) * scale));
+        }
+
+        acrylicLayer.SetCircles(circles, DiscRoot.ActualTheme != ElementTheme.Light);
+
+        IntPtr region = CreateRectRgn(0, 0, 0, 0);
+        foreach (var (circleCenter, radius) in circles)
+        {
+            IntPtr circle = CreateEllipticRgn(
+                (int)MathF.Floor(circleCenter.X - radius), (int)MathF.Floor(circleCenter.Y - radius),
+                (int)MathF.Ceiling(circleCenter.X + radius) + 1, (int)MathF.Ceiling(circleCenter.Y + radius) + 1);
+            CombineRgn(region, region, circle, RgnOr);
+            DeleteObject(circle);
+        }
+
+        if (SetWindowRgn(hwnd, region, true) == 0)
         {
             DeleteObject(region);
         }
+    }
+
+    private void RemoveWindowFrame()
+    {
+        int doNotRound = DwmCornerDoNotRound;
+        DwmSetWindowAttribute(hwnd, DwmaWindowCornerPreference, ref doNotRound, sizeof(int));
+        int noBorder = DwmColorNone;
+        DwmSetWindowAttribute(hwnd, DwmaBorderColor, ref noBorder, sizeof(int));
     }
 
     private void PlayOpenAnimation()
@@ -181,6 +216,8 @@ public sealed partial class SelectorWindow : Window
             return;
         }
 
+        var size = AppWindow.Size;
+        acrylicLayer.PlayOpenAnimation(new Vector2(size.Width / 2f, size.Height / 2f), OpenAnimationDuration);
         foreach (UIElement element in new UIElement[] { BrowserRing, HubButton })
         {
             var visual = ElementCompositionPreview.GetElementVisual(element);
@@ -207,46 +244,37 @@ public sealed partial class SelectorWindow : Window
     #region Hub
     private void UpdateHub()
     {
-        string host = GetDisplayHost(ViewModel.Url);
-        if (highlightedItem?.BrowserItem is { } browser)
-        {
-            HubTitle.Text = browser.Name;
-            HubSubtitle.Text = host;
-        }
-        else
-        {
-            HubTitle.Text = string.IsNullOrEmpty(host) ? Constants.NAME : host;
-            HubSubtitle.Text = "Pick a browser";
-        }
+        var (title, subtitle) = DescribeUrl(ViewModel.Url);
+        HubTitle.Text = string.IsNullOrEmpty(title) ? Constants.NAME : title;
+        HubSubtitle.Text = subtitle;
+        HubSubtitle.Visibility = string.IsNullOrEmpty(subtitle) ? Visibility.Collapsed : Visibility.Visible;
     }
 
-    private static string GetDisplayHost(string? url)
+    private static (string Title, string Subtitle) DescribeUrl(string? url)
     {
         if (string.IsNullOrWhiteSpace(url))
         {
-            return string.Empty;
+            return (string.Empty, string.Empty);
         }
 
-        if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && !string.IsNullOrEmpty(uri.Host))
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
         {
-            return uri.Host.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ? uri.Host[4..] : uri.Host;
+            return (url, string.Empty);
         }
 
-        return url;
-    }
-
-    private void SetHighlightedItem(RadialBrowserItem? item, bool highlighted)
-    {
-        if (highlighted)
+        if (uri.IsFile)
         {
-            highlightedItem = item;
-        }
-        else if (item is null || ReferenceEquals(highlightedItem, item))
-        {
-            highlightedItem = null;
+            return (System.IO.Path.GetFileName(uri.LocalPath), string.Empty);
         }
 
-        UpdateHub();
+        if (string.IsNullOrEmpty(uri.Host))
+        {
+            return (url, string.Empty);
+        }
+
+        string host = uri.Host.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ? uri.Host[4..] : uri.Host;
+        string rest = uri.PathAndQuery == "/" ? string.Empty : Uri.UnescapeDataString(uri.PathAndQuery);
+        return (host, rest);
     }
 
     private void HubMenu_Opening(object sender, object e)
@@ -268,13 +296,9 @@ public sealed partial class SelectorWindow : Window
         item.LaunchRequested += BrowserItem_LaunchRequested;
         item.AlternateLaunchRequested -= BrowserItem_AlternateLaunchRequested;
         item.AlternateLaunchRequested += BrowserItem_AlternateLaunchRequested;
-        item.HighlightChanged -= BrowserItem_HighlightChanged;
-        item.HighlightChanged += BrowserItem_HighlightChanged;
     }
 
     private void BrowserItem_LaunchRequested(object? sender, BrowserItemViewModel e) => ViewModel.LaunchBrowserCommand.Execute(e);
-
-    private void BrowserItem_HighlightChanged(object? sender, bool highlighted) => SetHighlightedItem(sender as RadialBrowserItem, highlighted);
 
     private void BrowserItem_AlternateLaunchRequested(object? sender, AlternateLaunchRequestedEventArgs e)
     {
@@ -299,8 +323,6 @@ public sealed partial class SelectorWindow : Window
         }
         else if (e.PropertyName == nameof(SelectorPageViewModel.Browsers))
         {
-            highlightedItem = null;
-            UpdateHub();
             ResizeAroundCenter();
         }
     }
@@ -507,6 +529,29 @@ public sealed partial class SelectorWindow : Window
         Clipboard.SetContent(package);
         Clipboard.Flush();
     }
+
+    private const int RgnOr = 2;
+    private static readonly IntPtr HwndTopmost = new(-1);
+    private const uint SwpNoSize = 0x0001;
+    private const uint SwpNoMove = 0x0002;
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
+
+    private const int DwmaWindowCornerPreference = 33;
+    private const int DwmaBorderColor = 34;
+    private const int DwmCornerDoNotRound = 1;
+    private const int DwmColorNone = unchecked((int)0xFFFFFFFE);
+
+    [LibraryImport("dwmapi.dll")]
+    private static partial int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+
+    [LibraryImport("gdi32.dll")]
+    private static partial IntPtr CreateRectRgn(int left, int top, int right, int bottom);
+
+    [LibraryImport("gdi32.dll")]
+    private static partial int CombineRgn(IntPtr destination, IntPtr source1, IntPtr source2, int mode);
 
     [LibraryImport("gdi32.dll")]
     private static partial IntPtr CreateEllipticRgn(int left, int top, int right, int bottom);

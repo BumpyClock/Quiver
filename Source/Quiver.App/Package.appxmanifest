@@ -43,7 +43,6 @@
       </uap:VisualElements>
 
       <Extensions>
-        <!-- http/https and the file types below make Quiver a candidate in Settings > Default apps. -->
         <uap:Extension Category="windows.protocol">
           <uap:Protocol Name="http">
             <uap:DisplayName>Quiver URL</uap:DisplayName>
@@ -84,8 +83,6 @@
       </Extensions>
     </Application>
 
-    <!-- Chromium native messaging host. Browsers launch it through the alias in
-         %LOCALAPPDATA%\Microsoft\WindowsApps; see Extensions/README.md. -->
     <Application Id="NativeMessagingHost" Executable="NativeMessagingHost.exe" EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
         DisplayName="Quiver Native Messaging Host"

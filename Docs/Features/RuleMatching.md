@@ -43,7 +43,7 @@ matches a URL, the one higher in the list wins.
 
 ## From UI
 
-Open **Settings** from the selector menu, then select **Rulesets**.
+Click the link in the center of the selector and choose **Rules**, or open **Settings** and select **Rulesets**.
 
 1. Enable **Rule Matching**.
 2. Select **Create** under **Create new Ruleset**. Enter a title, choose the target browser and optional **Alternate Launch**.
