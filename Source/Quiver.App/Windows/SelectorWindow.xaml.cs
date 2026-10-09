@@ -13,6 +13,7 @@ using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using System;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Numerics;
@@ -40,6 +41,8 @@ public sealed partial class SelectorWindow : Window
 
     private bool isHiddenToTray = true;
     private RadialBrowserItem? highlightedItem;
+    private Vector3KeyFrameAnimation? openScaleAnimation;
+    private ScalarKeyFrameAnimation? openOpacityAnimation;
 
     #region Window Lifecycle
     public SelectorWindow()
@@ -66,6 +69,7 @@ public sealed partial class SelectorWindow : Window
         Closed += SelectorWindow_Closed;
 
         InitializeComponent();
+        ViewModel.Browsers.CollectionChanged += ViewModel_Browsers_CollectionChanged;
         settingsService.SettingsChanged += SettingsChanged;
         UpdateHub();
     }
@@ -113,6 +117,7 @@ public sealed partial class SelectorWindow : Window
         ViewModel.CancelIconLoading();
         ViewModel.BrowserLaunched -= ViewModel_BrowserLaunched;
         ViewModel.PropertyChanged -= ViewModel_PropertyChanged;
+        ViewModel.Browsers.CollectionChanged -= ViewModel_Browsers_CollectionChanged;
         Activated -= Window_Activated;
     }
     #endregion
@@ -181,26 +186,37 @@ public sealed partial class SelectorWindow : Window
             return;
         }
 
-        foreach (UIElement element in new UIElement[] { BrowserRing, HubButton })
+        var ringVisual = ElementCompositionPreview.GetElementVisual(BrowserRing);
+        EnsureOpenAnimations(ringVisual.Compositor);
+        ringVisual.CenterPoint = new Vector3((float)BrowserRing.ActualSize.X / 2, (float)BrowserRing.ActualSize.Y / 2, 0);
+        var scaleAnimation = openScaleAnimation!;
+        var opacityAnimation = openOpacityAnimation!;
+        ringVisual.StartAnimation("Scale", scaleAnimation);
+        ringVisual.StartAnimation("Opacity", opacityAnimation);
+
+        var hubVisual = ElementCompositionPreview.GetElementVisual(HubButton);
+        hubVisual.CenterPoint = new Vector3((float)HubButton.ActualSize.X / 2, (float)HubButton.ActualSize.Y / 2, 0);
+        hubVisual.StartAnimation("Scale", scaleAnimation);
+        hubVisual.StartAnimation("Opacity", opacityAnimation);
+    }
+
+    private void EnsureOpenAnimations(Compositor compositor)
+    {
+        if (openScaleAnimation is not null && openOpacityAnimation is not null)
         {
-            var visual = ElementCompositionPreview.GetElementVisual(element);
-            var compositor = visual.Compositor;
-            var easing = compositor.CreateCubicBezierEasingFunction(new Vector2(0.16f, 1f), new Vector2(0.3f, 1f));
-            visual.CenterPoint = new Vector3((float)element.ActualSize.X / 2, (float)element.ActualSize.Y / 2, 0);
-
-            var scale = compositor.CreateVector3KeyFrameAnimation();
-            scale.InsertKeyFrame(0f, new Vector3(0.82f, 0.82f, 1));
-            scale.InsertKeyFrame(1f, Vector3.One, easing);
-            scale.Duration = OpenAnimationDuration;
-
-            var opacity = compositor.CreateScalarKeyFrameAnimation();
-            opacity.InsertKeyFrame(0f, 0f);
-            opacity.InsertKeyFrame(1f, 1f, easing);
-            opacity.Duration = OpenAnimationDuration;
-
-            visual.StartAnimation("Scale", scale);
-            visual.StartAnimation("Opacity", opacity);
+            return;
         }
+
+        var easing = compositor.CreateCubicBezierEasingFunction(new Vector2(0.16f, 1f), new Vector2(0.3f, 1f));
+        openScaleAnimation = compositor.CreateVector3KeyFrameAnimation();
+        openScaleAnimation.InsertKeyFrame(0f, new Vector3(0.82f, 0.82f, 1));
+        openScaleAnimation.InsertKeyFrame(1f, Vector3.One, easing);
+        openScaleAnimation.Duration = OpenAnimationDuration;
+
+        openOpacityAnimation = compositor.CreateScalarKeyFrameAnimation();
+        openOpacityAnimation.InsertKeyFrame(0f, 0f);
+        openOpacityAnimation.InsertKeyFrame(1f, 1f, easing);
+        openOpacityAnimation.Duration = OpenAnimationDuration;
     }
     #endregion
 
@@ -272,6 +288,14 @@ public sealed partial class SelectorWindow : Window
         item.HighlightChanged += BrowserItem_HighlightChanged;
     }
 
+    private void BrowserRing_ElementIndexChanged(ItemsRepeater sender, ItemsRepeaterElementIndexChangedEventArgs args)
+    {
+        if (args.Element is RadialBrowserItem item)
+        {
+            item.ShortcutNumber = args.NewIndex + 1;
+        }
+    }
+
     private void BrowserItem_LaunchRequested(object? sender, BrowserItemViewModel e) => ViewModel.LaunchBrowserCommand.Execute(e);
 
     private void BrowserItem_HighlightChanged(object? sender, bool highlighted) => SetHighlightedItem(sender as RadialBrowserItem, highlighted);
@@ -297,12 +321,13 @@ public sealed partial class SelectorWindow : Window
         {
             UpdateHub();
         }
-        else if (e.PropertyName == nameof(SelectorPageViewModel.Browsers))
-        {
-            highlightedItem = null;
-            UpdateHub();
-            ResizeAroundCenter();
-        }
+    }
+
+    private void ViewModel_Browsers_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        highlightedItem = null;
+        UpdateHub();
+        ResizeAroundCenter();
     }
 
     private void SettingsChanged(object? sender, SettingsChangedEventArgs e)

@@ -25,6 +25,8 @@
     <Compile Include="../../Source/Quiver.App/ViewModels/BrowserItemViewModel.cs" Link="BrowserItemViewModel.cs" />
     <Compile Include="../../Source/Quiver.App/ViewModels/SelectorPageViewModel.cs" Link="SelectorPageViewModel.cs" />
     <Compile Include="../../Source/Quiver.App/ViewModels/Settings/RulesetPageViewModel.cs" Link="RulesetPageViewModel.cs" />
+    <Compile Include="../../Source/Quiver.App/ViewModels/Settings/BrowsersPageViewModel.cs" Link="BrowsersPageViewModel.cs" />
+    <Compile Include="../../Source/Quiver.App/ViewModels/Settings/EditBrowserPageViewModel.cs" Link="EditBrowserPageViewModel.cs" />
     <Compile Include="../../Source/Quiver.App/Helpers/UriLauncher.cs" Link="UriLauncher.cs" />
   </ItemGroup>
 </Project>

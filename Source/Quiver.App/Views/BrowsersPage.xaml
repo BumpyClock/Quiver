@@ -9,7 +9,6 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:uc="using:Quiver.App.Controls"
     xmlns:vm="using:Quiver.App.ViewModels"
-    Loaded="Page_Loaded"
     mc:Ignorable="d">
 
     <Grid MaxWidth="800" RowSpacing="16">
@@ -20,10 +19,12 @@
         </Grid.RowDefinitions>
         <BreadcrumbBar ItemClicked="BreadcrumbBar_ItemClicked" ItemsSource="{x:Bind BreadcrumbItems}" />
         <ListView
+            x:Name="BrowserList"
             Grid.Row="1"
             AllowDrop="True"
             CanDragItems="True"
             CanReorderItems="True"
+            ContainerContentChanging="BrowserList_ContainerContentChanging"
             DragItemsCompleted="ListView_DragItemsCompleted"
             ItemsSource="{x:Bind ViewModel.Browsers}"
             SelectionMode="None">

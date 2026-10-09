@@ -7,6 +7,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Quiver.App.ViewModels
@@ -45,6 +46,7 @@ namespace Quiver.App.ViewModels
         private readonly IIconLoader iconLoader;
         private bool suppressPreviewRefresh;
         private int previewVersion;
+        private CancellationTokenSource? iconPreviewCancellation;
 
         // Tracks the current refresh so callers can await preview initialization or updates.
         public Task IconPreviewLoadTask { get; private set; } = Task.CompletedTask;
@@ -66,28 +68,54 @@ namespace Quiver.App.ViewModels
         private void RefreshIconPreview()
         {
             if (!suppressPreviewRefresh)
-                IconPreviewLoadTask = LoadIconPreviewAsync();
+            {
+                var cancellation = new CancellationTokenSource();
+                iconPreviewCancellation?.Cancel();
+                iconPreviewCancellation = cancellation;
+                int version = ++previewVersion;
+                IconPreviewLoadTask = LoadIconPreviewAsync(version, cancellation);
+            }
         }
 
-        private async Task LoadIconPreviewAsync()
+        private async Task LoadIconPreviewAsync(int version, CancellationTokenSource cancellation)
         {
-            int version = ++previewVersion;
             try
             {
-                var image = await iconLoader.LoadIconAsync(new Browser { ExePath = ExePath, Icon = Icon });
+                var image = await iconLoader.LoadIconAsync(
+                    new Browser { ExePath = ExePath, Icon = Icon },
+                    cancellation.Token);
                 if (version == previewVersion) IconPreview = image;
+            }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+            {
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"Could not refresh browser icon preview: {ex.Message}");
                 if (version == previewVersion) IconPreview = null;
             }
+            finally
+            {
+                if (ReferenceEquals(iconPreviewCancellation, cancellation))
+                {
+                    iconPreviewCancellation = null;
+                }
+                cancellation.Dispose();
+            }
+        }
+
+        public void CancelIconPreviewLoad()
+        {
+            previewVersion++;
+            var cancellation = iconPreviewCancellation;
+            iconPreviewCancellation = null;
+            cancellation?.Cancel();
         }
 
         public void ApplyIcon(BrowserIcon icon, BitmapImage preview)
         {
             // Reuse the validated chooser image and invalidate any older preview request.
-            previewVersion++;
+            CancelIconPreviewLoad();
             suppressPreviewRefresh = true;
             try
             {

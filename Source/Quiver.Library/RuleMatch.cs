@@ -11,7 +11,9 @@ public class RuleMatch
     private static readonly Queue<string> CacheOrder = new();
     private static readonly object CacheLock = new();
 
-    private sealed record CachedRule(Rule Rule, Regex? Regex);
+    internal sealed record CachedRule(Rule Rule, Regex? Regex);
+
+    public static PreparedRulesets PrepareRulesets(IEnumerable<Ruleset> rulesets) => new(rulesets);
 
     public static Ruleset? CheckRulesets(string link, List<Ruleset> rulesets)
     {
@@ -58,7 +60,7 @@ public class RuleMatch
             : new CachedRule(rule, null));
     }
 
-    private static bool CheckRule(string link, Uri? uri, CachedRule cached)
+    internal static bool CheckRule(string link, Uri? uri, CachedRule cached)
     {
         try
         {
@@ -105,8 +107,7 @@ public class RuleMatch
                 return cached;
             }
 
-            var rule = new Rule(storedRule);
-            cached = new CachedRule(rule, rule.Mode == RuleMode.Regex ? CreateRegex(rule.RuleContent) : null);
+            cached = PrepareRule(storedRule);
             if (RuleCache.Count == CacheLimit)
             {
                 RuleCache.Remove(CacheOrder.Dequeue());
@@ -115,6 +116,12 @@ public class RuleMatch
             CacheOrder.Enqueue(storedRule);
             return cached;
         }
+    }
+
+    internal static CachedRule PrepareRule(string storedRule)
+    {
+        var rule = new Rule(storedRule);
+        return new CachedRule(rule, rule.Mode == RuleMode.Regex ? CreateRegex(rule.RuleContent) : null);
     }
 
     private static Regex? CreateRegex(string pattern)

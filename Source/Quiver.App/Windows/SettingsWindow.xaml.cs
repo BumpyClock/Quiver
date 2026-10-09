@@ -1,4 +1,6 @@
 using CommunityToolkit.WinUI;
+using Quiver.App.Services.Interfaces;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -10,6 +12,9 @@ namespace Quiver.App.Windows;
 
 public sealed partial class SettingsWindow : Window
 {
+    private bool closeAfterFlush;
+    private bool isFlushing;
+
     public SettingsWindow()
     {
         InitializeComponent();
@@ -18,13 +23,42 @@ public sealed partial class SettingsWindow : Window
         AppWindow.ResizeClient(new SizeInt32(1320, 900));
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "internet.ico"));
         SystemBackdrop = new MicaBackdrop();
-        Closed += (_, _) =>
+        AppWindow.Closing += async (_, args) =>
         {
-            if (NavigationFrame.Content is Views.QuickViewPage quickViewPage)
+            if (closeAfterFlush) return;
+            args.Cancel = true;
+            if (isFlushing) return;
+            isFlushing = true;
+            try
             {
-                quickViewPage.CommitPendingArguments();
+                CommitPendingEdits();
+                await App.Services!.GetRequiredService<ISettingsService>().FlushAsync();
+                closeAfterFlush = true;
+                Close();
+            }
+            catch (Exception ex)
+            {
+                await new ContentDialog
+                {
+                    XamlRoot = NavigationFrame.XamlRoot,
+                    Title = "Could not save settings",
+                    Content = ex.Message,
+                    CloseButtonText = "Keep settings open"
+                }.ShowAsync();
+            }
+            finally
+            {
+                isFlushing = false;
             }
         };
+    }
+
+    public void CommitPendingEdits()
+    {
+        if (NavigationFrame.Content is Views.QuickViewPage quickViewPage)
+        {
+            quickViewPage.CommitPendingArguments();
+        }
     }
 
     private void OnNavItemClicked(object sender, ItemClickEventArgs e)

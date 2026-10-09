@@ -19,9 +19,16 @@ public sealed partial class BrowsersPage : Page
         Unloaded += (_, _) => ViewModel.CancelIconLoading();
     }
 
-    private async void Page_Loaded(object sender, RoutedEventArgs e)
+    private void BrowserList_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
     {
-        await ViewModel.LoadIconsAsync();
+        BrowserItemViewModel? item = args.InRecycleQueue
+            ? args.ItemContainer.Content as BrowserItemViewModel ?? args.Item as BrowserItemViewModel
+            : args.Item as BrowserItemViewModel ?? args.ItemContainer.Content as BrowserItemViewModel;
+
+        if (item is not null)
+        {
+            ViewModel.SetBrowserRealized(item, !args.InRecycleQueue);
+        }
     }
 
     private async void RefreshButton_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
@@ -40,11 +47,11 @@ public sealed partial class BrowsersPage : Page
         ContentDialogResult result = await dialog.ShowAsync();
         if (result == ContentDialogResult.Primary)
         {
-            await ViewModel.RefreshBrowserListAsync(BrowserRefreshMode.PreserveExistingByExePath);
+            ViewModel.RefreshBrowserList(BrowserRefreshMode.PreserveExistingByExePath);
         }
         else if (result == ContentDialogResult.Secondary)
         {
-            await ViewModel.RefreshBrowserListAsync(BrowserRefreshMode.AddAllDetectedAsNew);
+            ViewModel.RefreshBrowserList(BrowserRefreshMode.AddAllDetectedAsNew);
         }
     }
 

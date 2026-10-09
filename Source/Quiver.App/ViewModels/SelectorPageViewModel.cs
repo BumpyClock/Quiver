@@ -65,8 +65,51 @@ public partial class SelectorPageViewModel : ObservableObject
                     && oldState == state ? item : new BrowserItemViewModel(browser);
             }).ToArray();
         _browserStates = nextStates;
-        Browsers = new(items);
+        ApplyBrowserItems(items);
         _ = LoadIconsAsync(items, cancellation);
+    }
+
+    private void ApplyBrowserItems(BrowserItemViewModel[] items)
+    {
+        for (int targetIndex = 0; targetIndex < items.Length; targetIndex++)
+        {
+            BrowserItemViewModel item = items[targetIndex];
+            if (targetIndex < Browsers.Count && ReferenceEquals(Browsers[targetIndex], item))
+            {
+                continue;
+            }
+
+            int sameBrowserIndex = -1;
+            for (int index = targetIndex; index < Browsers.Count; index++)
+            {
+                if (Browsers[index].Model.Id == item.Model.Id)
+                {
+                    sameBrowserIndex = index;
+                    break;
+                }
+            }
+
+            if (sameBrowserIndex >= 0)
+            {
+                if (sameBrowserIndex != targetIndex)
+                {
+                    Browsers.Move(sameBrowserIndex, targetIndex);
+                }
+
+                if (!ReferenceEquals(Browsers[targetIndex], item))
+                {
+                    Browsers[targetIndex] = item;
+                }
+                continue;
+            }
+
+            Browsers.Insert(targetIndex, item);
+        }
+
+        while (Browsers.Count > items.Length)
+        {
+            Browsers.RemoveAt(Browsers.Count - 1);
+        }
     }
 
     public void CancelIconLoading()

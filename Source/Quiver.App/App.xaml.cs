@@ -14,6 +14,8 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using Windows.UI.StartScreen;
 using WinUIEx;
 
@@ -27,8 +29,11 @@ public partial class App : Microsoft.UI.Xaml.Application
     private static SettingsWindow? _settingsWindow;
     private readonly DispatcherQueue dispatcherQueue;
     private CliArgs? _pendingActivation;
+    private CliArgs? _matchingActivation;
+    private CancellationTokenSource? _activationCancellation;
     private bool isLaunched;
     private TrayService? trayService;
+    private static bool fatalExit;
 
     internal static bool IsExiting { get; private set; }
 
@@ -37,6 +42,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         dispatcherQueue = DispatcherQueue.GetForCurrentThread();
         dispatcherQueue.ShutdownStarting += DispatcherQueue_ShutdownStarting;
         Services = ConfigureServices();
+        Services.GetRequiredService<ISettingsService>().SettingsChanged += SettingsChanged;
         InitializeComponent();
         Current.UnhandledException += Dispatcher_UnhandledException;
         DispatcherShutdownMode = Microsoft.UI.Xaml.DispatcherShutdownMode.OnLastWindowClose;
@@ -107,8 +113,28 @@ public partial class App : Microsoft.UI.Xaml.Application
         _ = dispatcherQueue.TryEnqueue(() => HandleActivation(cliArgs));
     }
 
-    private void HandleActivation(CliArgs cliArgs)
+    private void SettingsChanged(object? sender, SettingsChangedEventArgs e)
     {
+        if ((e.Section & (SettingsSection.Rulesets | SettingsSection.Browsers | SettingsSection.AppSettings)) != 0
+            && _matchingActivation is { } activation)
+        {
+            HandleActivation(activation);
+        }
+    }
+
+    private void CancelActivation()
+    {
+        _activationCancellation?.Cancel();
+        _matchingActivation = null;
+    }
+
+    private async void HandleActivation(CliArgs cliArgs)
+    {
+        CancelActivation();
+        if (IsExiting)
+        {
+            return;
+        }
         IServiceProvider services = Services ?? throw new InvalidOperationException("Application services are not configured.");
 
         if (cliArgs.SettingsPage is string page)
@@ -122,22 +148,48 @@ public partial class App : Microsoft.UI.Xaml.Application
             return;
         }
 
-        var settings = services.GetRequiredService<ISettingsService>().LoadSettings();
-        if (cliArgs.Url is not null
-            && settings.AppSettings.RuleMatching
-            && RuleMatch.CheckRulesets(cliArgs.Url, settings.Rulesets) is Ruleset matchingRuleset)
+        var settingsService = services.GetRequiredService<ISettingsService>();
+        var settings = settingsService.LoadSettings();
+        if (cliArgs.Url is { } url && settings.AppSettings.RuleMatching)
         {
-            var selectedBrowser = settings.Browsers.FirstOrDefault(b => b.Id == matchingRuleset.BrowserId);
-            if (selectedBrowser is not null)
+            var snapshot = settingsService.PreparedRulesets;
+            using var cancellation = new CancellationTokenSource();
+            _activationCancellation = cancellation;
+            _matchingActivation = cliArgs;
+            try
             {
-                try
+                var match = await Task.Run(() => snapshot.Check(url, cancellation.Token), cancellation.Token);
+                if (cancellation.IsCancellationRequested || IsExiting)
                 {
-                    UriLauncher.ResolveAutomatically(cliArgs.Url, selectedBrowser, matchingRuleset.AlternateLaunchId);
                     return;
                 }
-                catch (Exception ex)
+                if (match is not null)
                 {
-                    Debug.WriteLine(ex);
+                    var selectedBrowser = settingsService.LoadSettings().Browsers.FirstOrDefault(b => b.Id == match.BrowserId);
+                    if (selectedBrowser is not null)
+                    {
+                        try
+                        {
+                            UriLauncher.ResolveAutomatically(url, selectedBrowser, match.AlternateLaunchId);
+                            return;
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine(ex);
+                        }
+                    }
+                }
+            }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+            {
+                return;
+            }
+            finally
+            {
+                if (ReferenceEquals(_activationCancellation, cancellation))
+                {
+                    _activationCancellation = null;
+                    _matchingActivation = null;
                 }
             }
         }
@@ -154,8 +206,15 @@ public partial class App : Microsoft.UI.Xaml.Application
         _selectorWindow.ShowWindow();
     }
 
-    private void ReloadApp()
+    private async void ReloadApp()
     {
+        IsExiting = true;
+        CancelActivation();
+        if (!await FlushSettingsAsync())
+        {
+            IsExiting = false;
+            return;
+        }
         // Restart ends this process before the new one starts, so the new one owns the single-instance key.
         trayService?.Dispose();
         var reason = AppInstance.Restart(string.Empty);
@@ -163,22 +222,62 @@ public partial class App : Microsoft.UI.Xaml.Application
         ExitApp();
     }
 
-    private void ExitApp()
+    private async void ExitApp()
     {
         IsExiting = true;
+        CancelActivation();
+        if (!await FlushSettingsAsync())
+        {
+            IsExiting = false;
+            return;
+        }
         trayService?.Dispose();
         Exit();
     }
 
-    private void DispatcherQueue_ShutdownStarting(DispatcherQueue sender, DispatcherQueueShutdownStartingEventArgs args)
+    private static async Task<bool> FlushSettingsAsync()
+    {
+        try
+        {
+            _settingsWindow?.CommitPendingEdits();
+            if (Services is { } services)
+            {
+                await services.GetRequiredService<ISettingsService>().FlushAsync();
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine(ex);
+            if (fatalExit)
+            {
+                return true;
+            }
+            MessageBox(IntPtr.Zero, $"Settings could not be saved.\n\n{ex.Message}", "Quiver - Save Error", 0x00000010 | 0x00010000);
+            return false;
+        }
+    }
+
+    private async void DispatcherQueue_ShutdownStarting(DispatcherQueue sender, DispatcherQueueShutdownStartingEventArgs args)
     {
         IsExiting = true;
+        CancelActivation();
         trayService?.Dispose();
         dispatcherQueue.ShutdownStarting -= DispatcherQueue_ShutdownStarting;
+        var deferral = args.GetDeferral();
+        try
+        {
+            await FlushSettingsAsync();
+        }
+        finally
+        {
+            deferral.Complete();
+        }
     }
 
     public static void ShowSettings(string page = "browsers")
     {
+        ((App)Current).CancelActivation();
         _selectorWindow?.MinimizeWindow();
         if (_settingsWindow is null)
         {
@@ -224,6 +323,8 @@ public partial class App : Microsoft.UI.Xaml.Application
         }
         finally
         {
+            fatalExit = true;
+            e.Handled = true;
             ExitApp();
         }
     }

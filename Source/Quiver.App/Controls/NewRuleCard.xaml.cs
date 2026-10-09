@@ -6,37 +6,19 @@ namespace Quiver.App.Controls;
 
 public sealed partial class NewRuleCard : UserControl
 {
+    private static readonly RuleMode[] RuleModeValues = Enum.GetValues<RuleMode>();
+
+    public RuleMode[] RuleModes => RuleModeValues;
+
+    public event EventHandler? DeleteRequested;
+
     public NewRuleCard()
     {
         InitializeComponent();
-
-        RuleTypeControl.ItemsSource = Enum.GetValues<RuleMode>();
-    }
-
-    public NewRuleCard(Rule rule)
-    {
-        InitializeComponent();
-        var ruleModes = Enum.GetValues<RuleMode>();
-
-        RuleTypeControl.ItemsSource = ruleModes;
-        RuleTypeControl.SelectedIndex = Array.IndexOf(ruleModes, rule.Mode); ;
-        RuleValueControl.Text = rule.RuleContent;
-    }
-
-    public Rule? ConstructRule()
-    {
-        var ruleType = RuleTypeControl.SelectedValue.ToString();
-        var ruleValue = RuleValueControl.Text;
-
-        if (!string.IsNullOrWhiteSpace(ruleValue))
-            return new Rule(ruleValue, ruleType);
-        return null;
     }
 
     private void DeleteButton_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
     {
-        if (Parent is StackPanel stackPanel)
-            stackPanel.Children.Remove(this);
+        DeleteRequested?.Invoke(this, EventArgs.Empty);
     }
 }
-

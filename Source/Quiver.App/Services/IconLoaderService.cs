@@ -3,6 +3,7 @@ using Quiver.Library;
 using Quiver.Library.Models;
 using Microsoft.UI.Xaml.Media.Imaging;
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -35,7 +36,9 @@ public partial class IconLoaderService : IIconLoader
     private readonly Dictionary<string, LinkedListNode<(string Key, BitmapImage Image, DateTime LoadedAt)>> decoded = [];
     private readonly LinkedList<(string Key, BitmapImage Image, DateTime LoadedAt)> decodedOrder = [];
     private readonly object sync = new();
-    private readonly SemaphoreSlim diskTrimGate = new(1, 1);
+    private Task diskMaintenanceTask = Task.CompletedTask;
+    private bool diskMaintenanceRunning;
+    private bool diskMaintenanceRequested;
 
     private sealed class PendingIconLoad
     {
@@ -174,19 +177,28 @@ public partial class IconLoaderService : IIconLoader
         }
     }
 
-    private static byte[] ExtractIcon(string path, int iconIndex)
+    private static MemoryStream ExtractIcon(string path, int iconIndex)
     {
         using var icon = Icon.ExtractIcon(path, iconIndex, IconSize)
             ?? throw new IOException($"Icon {iconIndex} was not found in '{path}'.");
         using var bitmap = icon.ToBitmap();
-        using var stream = new MemoryStream();
-        bitmap.Save(stream, ImageFormat.Png);
-        return stream.ToArray();
+        var stream = new MemoryStream();
+        try
+        {
+            bitmap.Save(stream, ImageFormat.Png);
+            stream.Position = 0;
+            return stream;
+        }
+        catch
+        {
+            stream.Dispose();
+            throw;
+        }
     }
     #endregion
 
     #region Cache Helper Methods
-    private async Task<BitmapImage?> LoadCachedIconAsync(string key, Func<CancellationToken, Task<byte[]>> loadSource,
+    private async Task<BitmapImage?> LoadCachedIconAsync(string key, Func<CancellationToken, Task<MemoryStream>> loadSource,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -248,14 +260,14 @@ public partial class IconLoaderService : IIconLoader
     }
 
     private async Task CompleteLoadAsync(string key, string cachePath,
-        Func<CancellationToken, Task<byte[]>> loadSource, PendingIconLoad request)
+        Func<CancellationToken, Task<MemoryStream>> loadSource, PendingIconLoad request)
     {
         BitmapImage? image = null;
+        MemoryStream? bytes = null;
         CancellationToken token = request.Cancellation.Token;
         try
         {
             token.ThrowIfCancellationRequested();
-            byte[]? bytes = null;
             DateTime fetchedAt = DateTime.UtcNow;
             try
             {
@@ -280,6 +292,7 @@ public partial class IconLoaderService : IIconLoader
 
             if (image is null)
             {
+                bytes?.Dispose();
                 bytes = await loadSource(token);
                 if (bytes.Length > MaxEncodedBytes)
                     throw new InvalidDataException("Icon image exceeds the 8 MiB limit.");
@@ -320,10 +333,11 @@ public partial class IconLoaderService : IIconLoader
                 request.Completion.SetResult(request.Abandoned ? null : image);
             }
             request.Cancellation.Dispose();
+            bytes?.Dispose();
         }
     }
 
-    private static async Task<byte[]> DownloadBoundedAsync(Uri uri, CancellationToken cancellationToken)
+    private static async Task<MemoryStream> DownloadBoundedAsync(Uri uri, CancellationToken cancellationToken)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(10));
@@ -332,34 +346,57 @@ public partial class IconLoaderService : IIconLoader
         if (response.Content.Headers.ContentLength is > MaxEncodedBytes)
             throw new InvalidDataException("Icon image exceeds the 8 MiB limit.");
         await using var source = await response.Content.ReadAsStreamAsync(timeout.Token);
-        return await ReadBoundedAsync(source, timeout.Token);
+        return await ReadBoundedAsync(source, timeout.Token, response.Content.Headers.ContentLength);
     }
 
-    private static async Task<byte[]> ReadLocalBoundedAsync(string path, CancellationToken cancellationToken)
+    private static async Task<MemoryStream> ReadLocalBoundedAsync(string path, CancellationToken cancellationToken)
     {
         await using var source = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite,
             bufferSize: 64 * 1024, useAsync: true);
         return await ReadBoundedAsync(source, cancellationToken);
     }
 
-    private static async Task<byte[]> ReadBoundedAsync(Stream source, CancellationToken cancellationToken = default)
-    {
-        using var destination = new MemoryStream();
-        byte[] buffer = new byte[64 * 1024];
-        int read;
-        while ((read = await source.ReadAsync(buffer, cancellationToken)) != 0)
-        {
-            if (destination.Length + read > MaxEncodedBytes)
-                throw new InvalidDataException("Icon image exceeds the 8 MiB limit.");
-            destination.Write(buffer, 0, read);
-        }
-        return destination.ToArray();
-    }
-
-    private static async Task<BitmapImage> DecodeAsync(byte[] bytes, CancellationToken cancellationToken)
+    private static async Task<MemoryStream> ReadBoundedAsync(Stream source,
+        CancellationToken cancellationToken = default, long? expectedLength = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        using var stream = new MemoryStream(bytes, writable: false);
+        expectedLength ??= source.CanSeek ? source.Length - source.Position : null;
+        if (expectedLength is > MaxEncodedBytes)
+            throw new InvalidDataException("Icon image exceeds the 8 MiB limit.");
+        var destination = new MemoryStream((int)Math.Max(0, expectedLength ?? 0));
+        byte[] buffer = ArrayPool<byte>.Shared.Rent(64 * 1024);
+        try
+        {
+            int read;
+            while ((read = await source.ReadAsync(buffer.AsMemory(0, 64 * 1024), cancellationToken)) != 0)
+            {
+                if (destination.Length + read > MaxEncodedBytes)
+                    throw new InvalidDataException("Icon image exceeds the 8 MiB limit.");
+                int requiredCapacity = (int)destination.Length + read;
+                if (requiredCapacity > destination.Capacity)
+                    destination.Capacity = Math.Min(MaxEncodedBytes,
+                        Math.Max(requiredCapacity, destination.Capacity * 2));
+                destination.Write(buffer, 0, read);
+            }
+            destination.Position = 0;
+            return destination;
+        }
+        catch
+        {
+            destination.Dispose();
+            throw;
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    private static async Task<BitmapImage> DecodeAsync(MemoryStream bytes, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        // WinRT owns this view; the payload stays alive for the subsequent cache write.
+        using var stream = new MemoryStream(bytes.GetBuffer(), 0, (int)bytes.Length, writable: false);
         using var randomAccessStream = stream.AsRandomAccessStream();
         var decoder = await BitmapDecoder.CreateAsync(randomAccessStream);
         cancellationToken.ThrowIfCancellationRequested();
@@ -373,25 +410,21 @@ public partial class IconLoaderService : IIconLoader
         return bitmap;
     }
 
-    private async Task TryCacheAsync(string cachePath, byte[] bytes, CancellationToken cancellationToken)
+    private async Task TryCacheAsync(string cachePath, MemoryStream bytes, CancellationToken cancellationToken)
     {
         string temporaryPath = cachePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
             Directory.CreateDirectory(cacheDirectory);
-            await File.WriteAllBytesAsync(temporaryPath, bytes, cancellationToken);
+            await using (var destination = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write,
+                FileShare.None, bufferSize: 1, useAsync: true))
+            {
+                await destination.WriteAsync(bytes.GetBuffer().AsMemory(0, (int)bytes.Length), cancellationToken);
+            }
             cancellationToken.ThrowIfCancellationRequested();
             // A unique temporary file and atomic replacement keep concurrent readers safe.
             File.Move(temporaryPath, cachePath, overwrite: true);
-            await diskTrimGate.WaitAsync(cancellationToken);
-            try
-            {
-                await Task.Run(TrimDiskCache, cancellationToken);
-            }
-            finally
-            {
-                diskTrimGate.Release();
-            }
+            RequestDiskMaintenance();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -410,6 +443,40 @@ public partial class IconLoaderService : IIconLoader
             catch (Exception ex)
             {
                 Debug.WriteLine($"Could not remove temporary icon: {ex.Message}");
+            }
+        }
+    }
+
+    private void RequestDiskMaintenance()
+    {
+        lock (sync)
+        {
+            diskMaintenanceRequested = true;
+            if (diskMaintenanceRunning) return;
+            diskMaintenanceRunning = true;
+            diskMaintenanceTask = Task.Run(MaintainDiskCacheAsync);
+        }
+    }
+
+    /// <summary>Waits for disk maintenance scheduled by completed icon loads.</summary>
+    public Task FlushCacheMaintenanceAsync()
+    {
+        lock (sync) return diskMaintenanceTask;
+    }
+
+    private async Task MaintainDiskCacheAsync()
+    {
+        while (true)
+        {
+            // One scan covers a burst of icon writes; no image waits for maintenance.
+            await Task.Delay(100).ConfigureAwait(false);
+            lock (sync) diskMaintenanceRequested = false;
+            TrimDiskCache();
+            lock (sync)
+            {
+                if (diskMaintenanceRequested) continue;
+                diskMaintenanceRunning = false;
+                return;
             }
         }
     }
@@ -444,6 +511,7 @@ public partial class IconLoaderService : IIconLoader
                 files.Add(file);
                 totalBytes += file.Length;
             }
+            if (totalBytes <= MaxDiskCacheBytes) return;
             files.Sort((left, right) => left.LastWriteTimeUtc.CompareTo(right.LastWriteTimeUtc));
             foreach (var file in files)
             {

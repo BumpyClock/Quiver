@@ -37,7 +37,7 @@ public sealed class QuickViewService(
 
         try
         {
-            List<Browser> browsers = settings.Browsers?.ToList() ?? [];
+            IEnumerable<Browser> browsers = settings.Browsers ?? [];
 
             return quickView.LaunchMode switch
             {
@@ -102,7 +102,7 @@ public sealed class QuickViewService(
         return true;
     }
 
-    private bool TryOpenBrowser(string url, List<Browser> browsers, QuickViewSettings quickView)
+    private bool TryOpenBrowser(string url, IEnumerable<Browser> browsers, QuickViewSettings quickView)
     {
         if (quickView.BrowserId is not Guid browserId)
         {

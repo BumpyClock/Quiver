@@ -44,6 +44,7 @@ internal sealed class SmokeApplication : Application
         string portraitPath = Path.Combine(fixtureDirectory, Guid.NewGuid().ToString("N") + ".png");
         string smallPath = Path.Combine(fixtureDirectory, Guid.NewGuid().ToString("N") + ".png");
         var evictionSources = new List<string>();
+        var loaders = new List<IconLoaderService>();
         try
         {
             using (var image = new Bitmap(1024, 512))
@@ -54,6 +55,7 @@ internal sealed class SmokeApplication : Application
             }
 
             var loader = new IconLoaderService(cacheDirectory);
+            loaders.Add(loader);
             var first = await loader.LoadIconFromImage(fixturePath);
             Check(first is not null, "real BitmapImage decode");
             Check(first!.DecodePixelWidth == 256 && first.DecodePixelHeight == 128,
@@ -118,6 +120,7 @@ internal sealed class SmokeApplication : Application
             File.SetLastWriteTimeUtc(staleRegular, DateTime.UtcNow.AddDays(-31));
             File.SetLastWriteTimeUtc(staleTemporary, DateTime.UtcNow.AddHours(-2));
             var diskLoader = new IconLoaderService(evictionDirectory);
+            loaders.Add(diskLoader);
             for (int index = 0; index < 10; index++)
             {
                 string path = Path.Combine(evictionDirectory, index.ToString("D64") + ".img");
@@ -128,6 +131,7 @@ internal sealed class SmokeApplication : Application
                 File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-20 + index));
             }
             Check(await diskLoader.LoadIconFromImage(fixturePath) is not null, "cache trim trigger loads");
+            await diskLoader.FlushCacheMaintenanceAsync();
             Check(!File.Exists(staleRegular) && !File.Exists(staleTemporary),
                 "stale regular and temporary cache files expire");
             Check(File.Exists(unrelated), "unrelated cache file retained");
@@ -135,6 +139,7 @@ internal sealed class SmokeApplication : Application
                 <= 64L * 1024 * 1024, "disk cache stays within 64 MiB");
 
             var memoryLoader = new IconLoaderService(cacheDirectory);
+            loaders.Add(memoryLoader);
             var firstMemoryImage = await memoryLoader.LoadIconFromImage(fixturePath);
             for (int index = 0; index < 65; index++)
             {
@@ -161,6 +166,48 @@ internal sealed class SmokeApplication : Application
             await pendingIcons.AllCanceled.WaitAsync(TimeSpan.FromSeconds(2));
             Check(pendingIcons.Canceled == 4, $"selector cancels pending icon loads on close ({pendingIcons.Canceled}/4)");
 
+            var stableSelector = new SelectorPageViewModel(browserSettings, new FakeIconLoader(first));
+            var selectorItems = stableSelector.Browsers;
+            var originalItem = selectorItems[0];
+            int collectionChanges = 0;
+            selectorItems.CollectionChanged += (_, _) => collectionChanges++;
+            stableSelector.RefreshBrowsers();
+            Check(ReferenceEquals(selectorItems, stableSelector.Browsers) && collectionChanges == 0,
+                "unchanged selector refresh preserves collection without resets");
+            browserSettings.LoadSettings().Browsers.Move(0, 2);
+            stableSelector.RefreshBrowsers();
+            Check(ReferenceEquals(selectorItems[2], originalItem), "selector reorder retains row and icon");
+            browserSettings.LoadSettings().Browsers[2].Hidden = true;
+            stableSelector.RefreshBrowsers();
+            Check(selectorItems.Count == 11 && !selectorItems.Contains(originalItem), "selector removes hidden row");
+            stableSelector.CancelIconLoading();
+
+            var realizedIcons = new PendingIconLoader();
+            var browserList = new BrowsersPageViewModel(browserSettings, realizedIcons);
+            Check(realizedIcons.Started == 0, "offscreen browser icons stay unloaded");
+            foreach (var item in browserList.Browsers) browserList.SetBrowserRealized(item, true);
+            Check(realizedIcons.Started == 4, "realized browser icons load with bounded concurrency");
+            browserList.CancelIconLoading();
+            await realizedIcons.AllCanceled.WaitAsync(TimeSpan.FromSeconds(2));
+            Check(realizedIcons.Canceled == 4, "browser page unload cancels active requests without starting queued work");
+
+            var cachedBrowserList = new BrowsersPageViewModel(browserSettings, new FakeIconLoader(first));
+            var realizedItem = cachedBrowserList.Browsers[0];
+            cachedBrowserList.SetBrowserRealized(realizedItem, true);
+            Check(ReferenceEquals(realizedItem.Icon, first), "realized browser row displays icon");
+            cachedBrowserList.SetBrowserRealized(realizedItem, false);
+            Check(realizedItem.Icon is null, "recycled browser row releases image reference");
+
+            var previewIcons = new PendingIconLoader();
+            var preview = new EditBrowserPageViewModel(browserSettings.LoadSettings().Browsers[0], browserSettings, previewIcons);
+            var supersededPreview = preview.IconPreviewLoadTask;
+            preview.ExePath = "replacement.exe";
+            await supersededPreview.WaitAsync(TimeSpan.FromSeconds(2));
+            Check(previewIcons.Started == 2 && previewIcons.Canceled == 1, "replacing preview cancels old request");
+            preview.CancelIconPreviewLoad();
+            await preview.IconPreviewLoadTask.WaitAsync(TimeSpan.FromSeconds(2));
+            Check(previewIcons.Canceled == 2, "leaving editor cancels current preview");
+
             var firstRule = new Ruleset { RulesetName = "First" };
             var secondRule = new Ruleset { RulesetName = "Second" };
             var rulesSettings = new InMemorySettingsService(new Settings { Rulesets = [firstRule, secondRule] });
@@ -179,6 +226,7 @@ internal sealed class SmokeApplication : Application
         }
         finally
         {
+            await Task.WhenAll(loaders.Select(loader => loader.FlushCacheMaintenanceAsync()));
             File.Delete(fixturePath);
             File.Delete(concurrentPath);
             File.Delete(oversizedPath);
@@ -248,6 +296,8 @@ internal sealed class SmokeApplication : Application
 
     private sealed class InMemorySettingsService(Settings settings) : ISettingsService
     {
+        public Quiver.Library.PreparedRulesets PreparedRulesets => Quiver.Library.RuleMatch.PrepareRulesets(settings.Rulesets);
+        public Task FlushAsync() => Task.CompletedTask;
         public event EventHandler<SettingsChangedEventArgs>? SettingsChanged
         {
             add { }

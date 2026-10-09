@@ -7,6 +7,7 @@
     xmlns:model="using:Quiver.Library.Models"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
+    xmlns:controls="using:Quiver.App.Controls"
     xmlns:viewmodels="using:Quiver.App.ViewModels"
     mc:Ignorable="d">
 
@@ -68,7 +69,24 @@
                 </Button>
             </toolkit:SettingsCard>
 
-            <StackPanel x:Name="RulesStack" />
+            <ListView
+                MaxHeight="320"
+                ItemsSource="{x:Bind DraftRules, Mode=OneWay}"
+                SelectionMode="None">
+                <ListView.ItemContainerStyle>
+                    <Style TargetType="ListViewItem">
+                        <Setter Property="Padding" Value="0" />
+                        <Setter Property="Margin" Value="0" />
+                        <Setter Property="MinHeight" Value="0" />
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    </Style>
+                </ListView.ItemContainerStyle>
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="viewmodels:DraftRuleViewModel">
+                        <controls:NewRuleCard DeleteRequested="RuleCard_DeleteRequested" />
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
         </StackPanel>
     </ScrollViewer>
 </Page>
