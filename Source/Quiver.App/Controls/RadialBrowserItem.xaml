@@ -5,8 +5,8 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    Width="60"
-    Height="60"
+    Width="80"
+    Height="80"
     mc:Ignorable="d">
 
     <Grid x:Name="ItemRoot">
@@ -16,9 +16,9 @@
             HorizontalAlignment="Stretch"
             VerticalAlignment="Stretch"
             AutomationProperties.Name="{x:Bind BrowserItem.Name, Mode=OneWay}"
-            BorderThickness="1.5"
+            BorderThickness="1"
             Click="LaunchButton_Click"
-            CornerRadius="30"
+            CornerRadius="40"
             GotFocus="LaunchButton_GotFocus"
             LostFocus="LaunchButton_LostFocus"
             PointerEntered="LaunchButton_PointerEntered"
@@ -26,38 +26,25 @@
             ToolTipService.ToolTip="{x:Bind ToolTipText, Mode=OneWay}">
             <Button.Resources>
                 <ResourceDictionary>
-                    <ResourceDictionary.ThemeDictionaries>
-                        <ResourceDictionary x:Key="Default">
-                            <StaticResource x:Key="ButtonBackground" ResourceKey="ControlFillColorDefaultBrush" />
-                            <StaticResource x:Key="ButtonBorderBrush" ResourceKey="ControlStrokeColorDefaultBrush" />
-                            <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="AccentFillColorDefaultBrush" />
-                            <StaticResource x:Key="ButtonBorderBrushPressed" ResourceKey="AccentFillColorSecondaryBrush" />
-                        </ResourceDictionary>
-                        <ResourceDictionary x:Key="Light">
-                            <StaticResource x:Key="ButtonBackground" ResourceKey="ControlFillColorDefaultBrush" />
-                            <StaticResource x:Key="ButtonBorderBrush" ResourceKey="ControlStrokeColorDefaultBrush" />
-                            <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="AccentFillColorDefaultBrush" />
-                            <StaticResource x:Key="ButtonBorderBrushPressed" ResourceKey="AccentFillColorSecondaryBrush" />
-                        </ResourceDictionary>
-                        <ResourceDictionary x:Key="HighContrast">
-                            <StaticResource x:Key="ButtonBackground" ResourceKey="SystemControlBackgroundBaseLowBrush" />
-                            <StaticResource x:Key="ButtonBorderBrush" ResourceKey="SystemControlForegroundTransparentBrush" />
-                            <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="SystemColorHighlightColorBrush" />
-                            <StaticResource x:Key="ButtonBorderBrushPressed" ResourceKey="SystemColorHighlightTextColorBrush" />
-                        </ResourceDictionary>
-                    </ResourceDictionary.ThemeDictionaries>
+                    <StaticResource x:Key="ButtonBackground" ResourceKey="SubtleFillColorTransparentBrush" />
+                    <StaticResource x:Key="ButtonBorderBrush" ResourceKey="SubtleFillColorTransparentBrush" />
+                    <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="SubtleFillColorSecondaryBrush" />
+                    <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="SubtleFillColorTertiaryBrush" />
+                    <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="AccentFillColorDefaultBrush" />
+                    <StaticResource x:Key="ButtonBorderBrushPressed" ResourceKey="AccentFillColorSecondaryBrush" />
                 </ResourceDictionary>
             </Button.Resources>
             <Image
-                Width="34"
-                Height="34"
+                x:Name="BrowserIcon"
+                Width="52"
+                Height="52"
                 Source="{x:Bind BrowserItem.Icon, Mode=OneWay}" />
         </Button>
         <Border
             x:Name="ShortcutBadge"
             MinWidth="18"
             Height="18"
-            Margin="0,0,-2,-2"
+            Margin="0,0,5,5"
             Padding="4,0"
             HorizontalAlignment="Right"
             VerticalAlignment="Bottom"

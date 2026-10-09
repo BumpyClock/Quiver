@@ -7,7 +7,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $RustTargets = @{ x64 = "x86_64-pc-windows-msvc"; arm64 = "aarch64-pc-windows-msvc" }
-$OutputPath = [IO.Path]::GetFullPath($OutputPath)
+$OutputPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputPath)
 $PackagesPath = Join-Path $OutputPath "packages"
 Remove-Item -Recurse -Force $OutputPath -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $PackagesPath | Out-Null

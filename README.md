@@ -28,7 +28,7 @@
 
 Sometimes you might want to open a link in a browser of your choice, instead of the default one. Quiver lets you choose the browser each time you click a link (links outside of browsers). So naturally, it acts as default browser to do that.
 
-- Modern Windows UI with multiple customization options
+- A radial browser picker that opens under the mouse cursor, with acrylic petals and number-key shortcuts
 - Supports adding custom browser configuration with Launch Arguments
 - Rules to automatically open a browser without prompting
 - Settings window to manage all the features
