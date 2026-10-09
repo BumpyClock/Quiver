@@ -109,6 +109,7 @@ public sealed partial class SelectorWindow : Window
             return;
         }
 
+        ViewModel.CancelIconLoading();
         settingsService.SettingsChanged -= SettingsChanged;
         ViewModel.BrowserLaunched -= ViewModel_BrowserLaunched;
         Activated -= Window_Activated;
@@ -242,17 +243,22 @@ public sealed partial class SelectorWindow : Window
         }
     }
 
-    private void SettingsChanged(object? sender, EventArgs e)
+    private void SettingsChanged(object? sender, SettingsChangedEventArgs e)
     {
-        if (isSavingWindowSize)
+        if (e.Section.HasFlag(SettingsSection.AppSettings) && !isSavingWindowSize)
         {
-            return;
+            ViewModel.RefreshAppSettings();
+            ApplyConfiguredBackground();
+            ApplyConfiguredWindowSize();
         }
-
-        ViewModel.RefreshSettings();
-        ApplyConfiguredBackground();
-        QuickViewButton.IsEnabled = quickViewService.IsQuickViewEnabled;
-        ApplyConfiguredWindowSize();
+        if (e.Section.HasFlag(SettingsSection.QuickView))
+        {
+            QuickViewButton.IsEnabled = quickViewService.IsQuickViewEnabled;
+        }
+        if (e.Section.HasFlag(SettingsSection.Browsers))
+        {
+            ViewModel.RefreshBrowsers();
+        }
     }
 
     private void SettingsBtnClick(object sender, RoutedEventArgs e) => App.ShowSettings("settings");

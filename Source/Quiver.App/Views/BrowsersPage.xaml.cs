@@ -16,6 +16,7 @@ public sealed partial class BrowsersPage : Page
     {
         ViewModel = App.Services!.GetRequiredService<BrowsersPageViewModel>();
         InitializeComponent();
+        Unloaded += (_, _) => ViewModel.CancelIconLoading();
     }
 
     private async void Page_Loaded(object sender, RoutedEventArgs e)

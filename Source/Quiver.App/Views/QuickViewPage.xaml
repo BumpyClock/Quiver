@@ -10,6 +10,7 @@
     d:DataContext="{d:DesignInstance Type=vm:QuickViewPageViewModel}"
     mc:Ignorable="d">
 
+    <ScrollViewer>
     <StackPanel MaxWidth="800" Spacing="16">
         <StackPanel Spacing="4">
             <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Quick View" />
@@ -77,11 +78,13 @@
                         <FontIcon Glyph="&#xE756;" />
                     </toolkit:SettingsCard.HeaderIcon>
                     <TextBox
+                        x:Name="AdditionalBrowserArgumentsTextBox"
                         Width="320"
                         IsSpellCheckEnabled="False"
                         IsTextPredictionEnabled="False"
+                        LostFocus="AdditionalBrowserArguments_LostFocus"
                         PlaceholderText="--disable-features=Example"
-                        Text="{x:Bind ViewModel.Option_AdditionalBrowserArguments, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        Text="{x:Bind ViewModel.Option_AdditionalBrowserArguments, Mode=OneWay}" />
                 </toolkit:SettingsCard>
 
                 <toolkit:SettingsCard
@@ -114,4 +117,5 @@
             </StackPanel>
         </StackPanel>
     </StackPanel>
+    </ScrollViewer>
 </Page>

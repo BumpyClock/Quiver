@@ -19,7 +19,7 @@ public class JsonFileService : ISettingsService
         this.settingsPath = settingsPath ?? Constants.APP_SETTINGS_MAIN;
     }
 
-    public event EventHandler? SettingsChanged;
+    public event EventHandler<SettingsChangedEventArgs>? SettingsChanged;
 
     // All windows share this instance; saving one section preserves the others.
     public Settings LoadSettings()
@@ -46,13 +46,13 @@ public class JsonFileService : ISettingsService
 
         if (firstRun)
         {
-            SaveSettings();
+            SaveSettings(SettingsSection.Browsers);
         }
 
         return settings;
     }
 
-    private void SaveSettings()
+    private void SaveSettings(SettingsSection section)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(settingsPath))!);
         string json = JsonSerializer.Serialize(settings, SelectorJsonSerializerContext.Default.Settings);
@@ -60,30 +60,30 @@ public class JsonFileService : ISettingsService
         string temporaryPath = settingsPath + ".tmp";
         File.WriteAllText(temporaryPath, json);
         File.Move(temporaryPath, settingsPath, overwrite: true);
-        SettingsChanged?.Invoke(this, EventArgs.Empty);
+        SettingsChanged?.Invoke(this, new SettingsChangedEventArgs(section));
     }
 
     public void UpdateAppSettings(AppSettings appSettings)
     {
         LoadSettings().AppSettings = appSettings;
-        SaveSettings();
+        SaveSettings(SettingsSection.AppSettings);
     }
 
     public void UpdateQuickView(QuickViewSettings quickView)
     {
         LoadSettings().QuickView = quickView;
-        SaveSettings();
+        SaveSettings(SettingsSection.QuickView);
     }
 
     public void UpdateBrowsers(ObservableCollection<Browser> browsers)
     {
         LoadSettings().Browsers = browsers;
-        SaveSettings();
+        SaveSettings(SettingsSection.Browsers);
     }
 
     public void UpdateRulesets(ObservableCollection<Ruleset> rulesets)
     {
         LoadSettings().Rulesets = [.. rulesets];
-        SaveSettings();
+        SaveSettings(SettingsSection.Rulesets);
     }
 }

@@ -2,6 +2,8 @@ using Quiver.App.Services.Interfaces;
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Diagnostics;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Quiver.App.ViewModels;
@@ -10,6 +12,7 @@ internal class BrowsersPageViewModel
 {
     private readonly ISettingsService settingsService;
     private readonly IIconLoader iconLoader;
+    private CancellationTokenSource? iconLoadCancellation;
 
     public ObservableCollection<BrowserItemViewModel> Browsers { get; }
 
@@ -22,14 +25,56 @@ internal class BrowsersPageViewModel
 
     public async Task LoadIconsAsync()
     {
-        foreach (var item in Browsers.ToArray())
+        iconLoadCancellation?.Cancel();
+        var cancellation = new CancellationTokenSource();
+        iconLoadCancellation = cancellation;
+        using (cancellation)
+        using (var concurrency = new SemaphoreSlim(4))
         {
-            item.Icon = await iconLoader.LoadIconAsync(item.Model);
+            try
+            {
+                await Task.WhenAll(Browsers.Where(item => item.Icon is null).ToArray().Select(async item =>
+                {
+                    await concurrency.WaitAsync(cancellation.Token);
+                    try
+                    {
+                        cancellation.Token.ThrowIfCancellationRequested();
+                        var icon = await iconLoader.LoadIconAsync(item.Model, cancellation.Token);
+                        if (!cancellation.IsCancellationRequested)
+                        {
+                            item.Icon = icon;
+                        }
+                    }
+                    finally
+                    {
+                        concurrency.Release();
+                    }
+                }));
+            }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Could not load browser icons: {ex}");
+            }
+            finally
+            {
+                if (ReferenceEquals(iconLoadCancellation, cancellation))
+                {
+                    iconLoadCancellation = null;
+                }
+            }
         }
+    }
+
+    public void CancelIconLoading()
+    {
+        iconLoadCancellation?.Cancel();
+        iconLoadCancellation = null;
     }
 
     public async Task RefreshBrowserListAsync(BrowserRefreshMode mode)
     {
+        CancelIconLoading();
         foreach (var browser in Library.GetBrowsers.FromRegistry())
         {
             if (mode == BrowserRefreshMode.AddAllDetectedAsNew

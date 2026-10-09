@@ -18,6 +18,13 @@ public sealed partial class SettingsWindow : Window
         AppWindow.ResizeClient(new SizeInt32(1320, 900));
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "internet.ico"));
         SystemBackdrop = new MicaBackdrop();
+        Closed += (_, _) =>
+        {
+            if (NavigationFrame.Content is Views.QuickViewPage quickViewPage)
+            {
+                quickViewPage.CommitPendingArguments();
+            }
+        };
     }
 
     private void OnNavItemClicked(object sender, ItemClickEventArgs e)

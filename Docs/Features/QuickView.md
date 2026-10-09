@@ -29,6 +29,8 @@ Configure it in **Quiver Settings > Quick View**, or add the following top-level
 - `AlternateLaunchId` selects one of that browser's alternate launches, `null` uses its default launch.
 
 ### WebView2 Configuration
+- Additional browser arguments are saved when you leave the text field, navigate to another settings page,
+  or close the settings window. Other Quick View options are saved immediately.
 - `AdditionalBrowserArguments` and `BrowserExtensionsEnabled` configure the WebView2 environment.
   Restart Quiver after changing them if you have already opened a Quick View window.
 - `TrackingPrevention` supports `None`, `Basic`, `Balanced` (default), or `Strict` for the WebView2 profile.

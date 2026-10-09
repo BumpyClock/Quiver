@@ -12,7 +12,20 @@ public sealed partial class QuickViewPage : Page
         InitializeComponent();
 
         ViewModel = App.Services!.GetRequiredService<QuickViewPageViewModel>();
+        Unloaded += (_, _) => CommitPendingArguments();
     }
 
     public QuickViewPageViewModel ViewModel { get; }
+
+    private void AdditionalBrowserArguments_LostFocus(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+        => CommitPendingArguments();
+
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        CommitPendingArguments();
+        base.OnNavigatedFrom(e);
+    }
+
+    public void CommitPendingArguments()
+        => ViewModel.Option_AdditionalBrowserArguments = AdditionalBrowserArgumentsTextBox.Text;
 }
