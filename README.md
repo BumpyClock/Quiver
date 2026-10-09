@@ -63,7 +63,7 @@ Run `./build.ps1` from the repo root. It builds the Rust NativeMessagingHost for
 
 For local debugging, open `./Quiver.sln` in Visual Studio and run the **Quiver.App (Package)** launch profile, which deploys the MSIX. Build `NativeMessagingHost.exe` first: `cargo build --release --target x86_64-pc-windows-msvc`.
 
-The app defaults to x64 and selects its NativeAOT runtime identifier from the selected platform. Use `dotnet build .\Source\Quiver.App\Quiver.App.csproj -p:Platform=ARM64` for ARM64, after building the native host with `cargo build --release --target aarch64-pc-windows-msvc`. An explicit `-r win-x64` or `-r win-arm64` is still supported.
+The app defaults to x64 and selects its NativeAOT runtime identifier from the selected platform. Both the .NET runtime and Windows App SDK are self-contained by default, including when packaging from Visual Studio. Use `dotnet build .\Source\Quiver.App\Quiver.App.csproj -p:Platform=ARM64` for ARM64, after building the native host with `cargo build --release --target aarch64-pc-windows-msvc`. An explicit `-r win-x64` or `-r win-arm64` is still supported.
 
 To check out older versions source code, go to [Github Tags](https://github.com/BumpyClock/Quiver/tags).
 

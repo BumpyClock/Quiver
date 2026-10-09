@@ -26,7 +26,7 @@ foreach ($platform in $Platforms) {
   Write-Output "Building Quiver MSIX ($platform)...."
   Invoke-Native {
     # GenerateAppxPackageOnBuild is what makes the MSIX tooling package the NativeAOT publish output.
-    dotnet build .\Source\Quiver.App\Quiver.App.csproj -c Release -r "win-$platform" -p:Platform=$platform -p:SelfContained=true `
+    dotnet build .\Source\Quiver.App\Quiver.App.csproj -c Release -r "win-$platform" -p:Platform=$platform `
       -p:GenerateAppxPackageOnBuild=true -p:AppxPackageSigningEnabled=false -p:AppxBundle=Never `
       -p:AppxPackageDir="$OutputPath\AppPackages\$platform\"
   }

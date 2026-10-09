@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Fix NativeAOT runtime selection for x64 and ARM64 builds, correct the .NET SDK baseline, and resolve build warnings in package dependencies, browser initialization, and the About page.
+- Fix NativeAOT runtime selection and self-contained defaults for x64 and ARM64 builds, correct the .NET SDK baseline, and resolve build warnings in package dependencies, browser initialization, and the About page.
 - Run prepared rule matching in the background and preserve activation routing when settings restart a pending check.
 - Reduce encoded icon allocations, coalesce cache maintenance, and drain pending icon work on normal exit or restart.
 - Load browser-settings icons for realized rows and release them reliably when containers recycle.
