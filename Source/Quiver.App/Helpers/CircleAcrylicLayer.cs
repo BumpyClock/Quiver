@@ -1,5 +1,6 @@
 using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.Effects;
+using Microsoft.UI.Dispatching;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
@@ -22,7 +23,11 @@ internal sealed partial class CircleAcrylicLayer : IDisposable
     private readonly ContainerVisual root;
     private readonly ContainerVisual plates;
     private readonly UISettings uiSettings = new();
+    private readonly DispatcherQueue dispatcherQueue;
+    private readonly bool hostBackdropSupported;
+    private IReadOnlyList<(Vector2 Center, float Radius)> circles = [];
     private bool isDark = true;
+    private bool disposed;
     private CompositionEffectFactory? acrylicFactory;
     private bool acrylicFactoryIsDark;
 
@@ -30,7 +35,8 @@ internal sealed partial class CircleAcrylicLayer : IDisposable
     {
         EnsureDispatcherQueue();
         int useHostBackdrop = 1;
-        DwmSetWindowAttribute(hwnd, DwmaUseHostBackdropBrush, ref useHostBackdrop, sizeof(int));
+        hostBackdropSupported = DwmSetWindowAttribute(hwnd, DwmaUseHostBackdropBrush, ref useHostBackdrop, sizeof(int)) >= 0;
+        dispatcherQueue = DispatcherQueue.GetForCurrentThread();
         compositor = new Compositor();
         target = CreateDesktopWindowTarget(compositor, hwnd);
 
@@ -41,14 +47,17 @@ internal sealed partial class CircleAcrylicLayer : IDisposable
         plates = compositor.CreateContainerVisual();
         plates.RelativeSizeAdjustment = Vector2.One;
         root.Children.InsertAtTop(plates);
+
+        uiSettings.AdvancedEffectsEnabledChanged += UISettings_AdvancedEffectsEnabledChanged;
     }
 
     public void SetCircles(IReadOnlyList<(Vector2 Center, float Radius)> circles, bool dark)
     {
+        this.circles = circles;
         isDark = dark;
         plates.Children.RemoveAll();
 
-        bool useBlur = uiSettings.AdvancedEffectsEnabled;
+        bool useBlur = hostBackdropSupported && uiSettings.AdvancedEffectsEnabled;
         foreach (var (center, radius) in circles)
         {
             var plate = compositor.CreateSpriteVisual();
@@ -61,6 +70,17 @@ internal sealed partial class CircleAcrylicLayer : IDisposable
             plate.Clip = compositor.CreateGeometricClip(clipGeometry);
             plates.Children.InsertAtTop(plate);
         }
+    }
+
+    private void UISettings_AdvancedEffectsEnabledChanged(UISettings sender, object args)
+    {
+        dispatcherQueue.TryEnqueue(() =>
+        {
+            if (!disposed)
+            {
+                SetCircles(circles, isDark);
+            }
+        });
     }
 
     public void PlayOpenAnimation(Vector2 centerPx, TimeSpan duration)
@@ -122,6 +142,8 @@ internal sealed partial class CircleAcrylicLayer : IDisposable
 
     public void Dispose()
     {
+        disposed = true;
+        uiSettings.AdvancedEffectsEnabledChanged -= UISettings_AdvancedEffectsEnabledChanged;
         target.Dispose();
         compositor.Dispose();
     }

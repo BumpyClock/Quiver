@@ -186,6 +186,11 @@ public sealed partial class SelectorWindow : Window
         acrylicLayer.SetCircles(circles, DiscRoot.ActualTheme != ElementTheme.Light);
 
         IntPtr region = CreateRectRgn(0, 0, 0, 0);
+        if (region == IntPtr.Zero)
+        {
+            return;
+        }
+
         foreach (var (circleCenter, radius) in circles)
         {
             IntPtr circle = CreateEllipticRgn(
