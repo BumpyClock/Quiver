@@ -12,48 +12,51 @@
     Loaded="Page_Loaded"
     mc:Ignorable="d">
 
-    <StackPanel MaxWidth="800" Spacing="16">
-        <StackPanel Spacing="4">
-            <BreadcrumbBar ItemClicked="BreadcrumbBar_ItemClicked" ItemsSource="{x:Bind BreadcrumbItems}" />
-            <ListView
-                AllowDrop="True"
-                CanDragItems="True"
-                CanReorderItems="True"
-                DragItemsCompleted="ListView_DragItemsCompleted"
-                ItemsSource="{x:Bind ViewModel.Browsers}"
-                SelectionMode="None">
-                <ListView.ItemContainerStyle>
-                    <Style TargetType="ListViewItem">
-                        <Setter Property="Padding" Value="0" />
-                        <Setter Property="Margin" Value="0" />
-                        <Setter Property="MinHeight" Value="0" />
-                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                    </Style>
-                </ListView.ItemContainerStyle>
-                <ListView.ItemTemplate>
-                    <DataTemplate x:DataType="vm:BrowserItemViewModel">
-                        <ctlabs:SettingsCard Description="{x:Bind Model.ExePath, Mode=OneWay}" Header="{x:Bind Model.Name, Mode=OneWay}">
-                            <ctlabs:SettingsCard.HeaderIcon>
-                                <ImageIcon Source="{x:Bind Icon, Mode=OneWay}" />
-                            </ctlabs:SettingsCard.HeaderIcon>
-                            <SplitButton x:Name="myColorButton" Click="EditBrowser_Click">
-                                Edit
-                                <SplitButton.Flyout>
-                                    <MenuFlyout Placement="Bottom">
-                                        <MenuFlyoutItem Click="DeleteBrowser_Click" Tag="{x:Bind Model.Id}">
-                                            Delete
-                                        </MenuFlyoutItem>
-                                    </MenuFlyout>
-                                </SplitButton.Flyout>
-                            </SplitButton>
-                        </ctlabs:SettingsCard>
-                    </DataTemplate>
-                </ListView.ItemTemplate>
+    <Grid MaxWidth="800" RowSpacing="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <BreadcrumbBar ItemClicked="BreadcrumbBar_ItemClicked" ItemsSource="{x:Bind BreadcrumbItems}" />
+        <ListView
+            Grid.Row="1"
+            AllowDrop="True"
+            CanDragItems="True"
+            CanReorderItems="True"
+            DragItemsCompleted="ListView_DragItemsCompleted"
+            ItemsSource="{x:Bind ViewModel.Browsers}"
+            SelectionMode="None">
+            <ListView.ItemContainerStyle>
+                <Style TargetType="ListViewItem">
+                    <Setter Property="Padding" Value="0" />
+                    <Setter Property="Margin" Value="0" />
+                    <Setter Property="MinHeight" Value="0" />
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                </Style>
+            </ListView.ItemContainerStyle>
+            <ListView.ItemTemplate>
+                <DataTemplate x:DataType="vm:BrowserItemViewModel">
+                    <ctlabs:SettingsCard Description="{x:Bind Model.ExePath, Mode=OneWay}" Header="{x:Bind Model.Name, Mode=OneWay}">
+                        <ctlabs:SettingsCard.HeaderIcon>
+                            <ImageIcon Source="{x:Bind Icon, Mode=OneWay}" />
+                        </ctlabs:SettingsCard.HeaderIcon>
+                        <SplitButton x:Name="myColorButton" Click="EditBrowser_Click">
+                            Edit
+                            <SplitButton.Flyout>
+                                <MenuFlyout Placement="Bottom">
+                                    <MenuFlyoutItem Click="DeleteBrowser_Click" Tag="{x:Bind Model.Id}">
+                                        Delete
+                                    </MenuFlyoutItem>
+                                </MenuFlyout>
+                            </SplitButton.Flyout>
+                        </SplitButton>
+                    </ctlabs:SettingsCard>
+                </DataTemplate>
+            </ListView.ItemTemplate>
 
-            </ListView>
-        </StackPanel>
-
-        <StackPanel Spacing="4">
+        </ListView>
+        <StackPanel Grid.Row="2" Spacing="4">
             <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Other Options" />
             <StackPanel>
                 <ctlabs:SettingsCard Description="Add a custom browser or app entry manually" Header="Add browser entry">
@@ -80,5 +83,5 @@
                 </ctlabs:SettingsCard>
             </StackPanel>
         </StackPanel>
-    </StackPanel>
+    </Grid>
 </Page>

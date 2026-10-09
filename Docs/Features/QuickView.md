@@ -34,3 +34,6 @@ Configure it in **Quiver Settings > Quick View**, or add the following top-level
 - `AdditionalBrowserArguments` and `BrowserExtensionsEnabled` configure the WebView2 environment.
   Restart Quiver after changing them if you have already opened a Quick View window.
 - `TrackingPrevention` supports `None`, `Basic`, `Balanced` (default), or `Strict` for the WebView2 profile.
+
+Closing a Quick View window closes its WebView2 control and stops pending navigation for that window.
+The shared WebView2 environment remains available for other Quick View windows.

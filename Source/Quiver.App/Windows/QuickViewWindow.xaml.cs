@@ -28,6 +28,7 @@ public sealed partial class QuickViewWindow : Window
     private readonly IWebViewEnvironmentService webViewEnvironmentService;
     private readonly WebView2 quickWebView;
     private bool isWebViewInitialized;
+    private bool isClosed;
     private Uri? pendingNavigationUri;
 
     public QuickViewWindow(
@@ -62,6 +63,9 @@ public sealed partial class QuickViewWindow : Window
     #region Lifecycle Events
     private void QuickViewWindow_Closed(object sender, WindowEventArgs args)
     {
+        isClosed = true;
+        isWebViewInitialized = false;
+        pendingNavigationUri = null;
         ToolbarBorder.Loaded -= ToolbarBorder_Loaded;
 
         if (quickWebView.CoreWebView2 is not null)
@@ -72,6 +76,8 @@ public sealed partial class QuickViewWindow : Window
         quickWebView.CoreWebView2Initialized -= QuickWebView_CoreWebView2Initialized;
         quickWebView.NavigationStarting -= QuickWebView_NavigationStarting;
         quickWebView.NavigationCompleted -= QuickWebView_NavigationCompleted;
+        quickWebView.Close();
+        WebViewHost.Children.Clear();
     }
 
     private void ToolbarBorder_Loaded(object sender, RoutedEventArgs e)
@@ -94,7 +100,13 @@ public sealed partial class QuickViewWindow : Window
         try
         {
             CoreWebView2Environment environment = await webViewEnvironmentService.GetEnvironmentAsync();
+            if (isClosed) return;
             await quickWebView.EnsureCoreWebView2Async(environment);
+            if (isClosed)
+            {
+                quickWebView.Close();
+                return;
+            }
 
             isWebViewInitialized = true;
             if (pendingNavigationUri is not null)
@@ -107,7 +119,7 @@ public sealed partial class QuickViewWindow : Window
         catch (Exception ex)
         {
             Debug.WriteLine(ex);
-            SetLoading(false);
+            if (!isClosed) SetLoading(false);
         }
     }
 
@@ -191,6 +203,7 @@ public sealed partial class QuickViewWindow : Window
     #region WebView Event Handlers
     private void QuickWebView_CoreWebView2Initialized(WebView2 sender, CoreWebView2InitializedEventArgs args)
     {
+        if (isClosed) return;
         if (args.Exception is not null)
         {
             Debug.WriteLine(args.Exception);
@@ -235,6 +248,7 @@ public sealed partial class QuickViewWindow : Window
 
     private void Navigate(string? url)
     {
+        if (isClosed) return;
         if (!TryCreateQuickViewUri(url, out var uri))
         {
             return;

@@ -6,6 +6,8 @@
 - [Rule Matching](./Features/RuleMatching.md)
 - [Quick View](./Features/QuickView.md)
 
+Developer verification: [Performance and memory changes](./Dev/Performance.md).
+
 When Quiver is launched for the first time, it automatically detects the installed browsers and creates a _UserSettings.json_ file in the package's LocalState folder (`%LOCALAPPDATA%\Packages\<PackageFamilyName>\LocalState\UserSettings.json`), filling it with browsers it detected. The easiest way to open it is **Quiver Settings** > **Settings** page > **edit JSON** button. A typical UserSettings.json file looks like this:
 
 ```json

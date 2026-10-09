@@ -24,11 +24,11 @@ class UriLauncher
         if (!string.IsNullOrEmpty(browser.LaunchArgs) && browser.LaunchArgs.Contains("%URL%"))
         {
             var newArg = browser.LaunchArgs.Replace("%URL%", uri);
-            Process.Start(browser.ExePath, newArg);
+            using var process = Process.Start(browser.ExePath, newArg);
         }
         else
         {
-            Process.Start(browser.ExePath, uri + " " + browser.LaunchArgs);
+            using var process = Process.Start(browser.ExePath, uri + " " + browser.LaunchArgs);
         }
     }
 
@@ -45,12 +45,12 @@ class UriLauncher
         if (alt.LaunchArgs.Contains("%URL%"))
         {
             var args = alt.LaunchArgs.Replace("%URL%", uri);
-            Process.Start(browser.ExePath, args);
+            using var process = Process.Start(browser.ExePath, args);
         }
         else
         {
             var args = uri + " " + alt.LaunchArgs;
-            Process.Start(browser.ExePath, args);
+            using var process = Process.Start(browser.ExePath, args);
         }
     }
 }

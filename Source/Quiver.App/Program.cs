@@ -56,7 +56,7 @@ public partial class Program
     {
         keyInstance.RedirectActivationToAsync(args).AsTask().Wait();
 
-        Process process = Process.GetProcessById((int)keyInstance.ProcessId);
+        using Process process = Process.GetProcessById((int)keyInstance.ProcessId);
         SetForegroundWindow(process.MainWindowHandle);
     }
 }
