@@ -30,7 +30,7 @@
                             <TextBlock Style="{StaticResource BodyTextBlockStyle}" Text="Open Source Libraries" />
                         </StackPanel>
                     </Expander.Header>
-                    <ItemsRepeater Margin="12" ItemsSource="{x:Bind OpenSourceLibraries, Mode=OneWay}">
+                    <ItemsRepeater Margin="12" ItemsSource="{x:Bind OpenSourceLibraries}">
                         <ItemsRepeater.ItemTemplate>
                             <DataTemplate x:DataType="local:OSSLibrary">
                                 <TextBlock Margin="4,0" VerticalAlignment="Center">

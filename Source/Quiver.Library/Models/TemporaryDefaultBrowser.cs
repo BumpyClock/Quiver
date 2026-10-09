@@ -2,7 +2,7 @@
 
 public class TemporaryDefaultBrowser
 {
-    public Browser TargetBrowser { get; set; }
+    public required Browser TargetBrowser { get; set; }
 
     public DateTime SelectedAt { get; set; }
 
