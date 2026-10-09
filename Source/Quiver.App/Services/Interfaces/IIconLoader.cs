@@ -7,6 +7,8 @@ namespace Quiver.App.Services.Interfaces;
 
 public interface IIconLoader
 {
+    Task StopAsync();
+    Task FlushCacheMaintenanceAsync();
     Task<BitmapImage?> LoadIconAsync(Browser browser, CancellationToken cancellationToken = default);
     Task<BitmapImage?> LoadIconFromExe(string exePath, CancellationToken cancellationToken = default);
     Task<BitmapImage?> LoadIconFromExe(string exePath, int iconIndex, CancellationToken cancellationToken = default);

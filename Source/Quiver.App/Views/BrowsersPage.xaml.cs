@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using System;
 using System.Collections.ObjectModel;
+using System.Linq;
 
 namespace Quiver.App.Views;
 
@@ -16,19 +17,28 @@ public sealed partial class BrowsersPage : Page
     {
         ViewModel = App.Services!.GetRequiredService<BrowsersPageViewModel>();
         InitializeComponent();
-        Unloaded += (_, _) => ViewModel.CancelIconLoading();
+        Unloaded += BrowsersPage_Unloaded;
     }
 
     private void BrowserList_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
     {
-        BrowserItemViewModel? item = args.InRecycleQueue
-            ? args.ItemContainer.Content as BrowserItemViewModel ?? args.Item as BrowserItemViewModel
-            : args.Item as BrowserItemViewModel ?? args.ItemContainer.Content as BrowserItemViewModel;
+        BrowserContainerAssociation.Update(
+            (ListViewItem)args.ItemContainer,
+            args.InRecycleQueue ? null : args.Item as BrowserItemViewModel,
+            ViewModel);
+    }
 
-        if (item is not null)
+    private void BrowsersPage_Unloaded(object sender, RoutedEventArgs e)
+    {
+        if (BrowserList.ItemsPanelRoot is Panel panel)
         {
-            ViewModel.SetBrowserRealized(item, !args.InRecycleQueue);
+            foreach (ListViewItem container in panel.Children.OfType<ListViewItem>())
+            {
+                BrowserContainerAssociation.Update(container, null, ViewModel);
+            }
         }
+
+        ViewModel.CancelIconLoading();
     }
 
     private async void RefreshButton_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)

@@ -117,7 +117,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         if ((e.Section & (SettingsSection.Rulesets | SettingsSection.Browsers | SettingsSection.AppSettings)) != 0
             && _matchingActivation is { } activation)
         {
-            HandleActivation(activation);
+            MatchRulesAndShowSelector(activation);
         }
     }
 
@@ -127,7 +127,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         _matchingActivation = null;
     }
 
-    private async void HandleActivation(CliArgs cliArgs)
+    private void HandleActivation(CliArgs cliArgs)
     {
         CancelActivation();
         if (IsExiting)
@@ -146,6 +146,15 @@ public partial class App : Microsoft.UI.Xaml.Application
         {
             return;
         }
+
+        MatchRulesAndShowSelector(cliArgs);
+    }
+
+    private async void MatchRulesAndShowSelector(CliArgs cliArgs)
+    {
+        CancelActivation();
+        if (IsExiting) return;
+        IServiceProvider services = Services ?? throw new InvalidOperationException("Application services are not configured.");
 
         var settingsService = services.GetRequiredService<ISettingsService>();
         var settings = settingsService.LoadSettings();
@@ -209,7 +218,7 @@ public partial class App : Microsoft.UI.Xaml.Application
     {
         IsExiting = true;
         CancelActivation();
-        if (!await FlushSettingsAsync())
+        if (!await FlushPendingWorkAsync())
         {
             IsExiting = false;
             return;
@@ -224,7 +233,7 @@ public partial class App : Microsoft.UI.Xaml.Application
     {
         IsExiting = true;
         CancelActivation();
-        if (!await FlushSettingsAsync())
+        if (!await FlushPendingWorkAsync())
         {
             IsExiting = false;
             return;
@@ -233,7 +242,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         Exit();
     }
 
-    private static async Task<bool> FlushSettingsAsync()
+    private static async Task<bool> FlushPendingWorkAsync()
     {
         try
         {
@@ -241,6 +250,7 @@ public partial class App : Microsoft.UI.Xaml.Application
             if (Services is { } services)
             {
                 await services.GetRequiredService<ISettingsService>().FlushAsync();
+                await services.GetRequiredService<IIconLoader>().StopAsync();
             }
             return true;
         }
@@ -265,7 +275,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         var deferral = args.GetDeferral();
         try
         {
-            await FlushSettingsAsync();
+            await FlushPendingWorkAsync();
         }
         finally
         {

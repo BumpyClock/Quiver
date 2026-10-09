@@ -32,8 +32,10 @@ Release-note context for the next release:
   preallocated within the 8 MiB limit, and read buffers are pooled. Disk maintenance coalesces writes over
   100 ms and runs independently of image completion; the 64 MiB budget is enforced after maintenance,
   rather than before each image displays. Atomic cache writes remain on the image completion path.
+  Normal exit and restart stop new loads, cancel active requests, and drain their cache maintenance.
 - Browser settings load icons only for realized rows, with at most four active loads. Recycled rows release
-  their image references. Editing or leaving a browser preview cancels its obsolete request.
+  their image references using the container's saved association, even after WinUI clears its content.
+  Editing or leaving a browser preview cancels its obsolete request.
 - Selector updates preserve collection identity and apply individual moves, replacements, additions, and
   removals. Opening and highlighting the selector reuse composition animations and easing functions.
 - Rule editing uses a bounded virtualized list. Draft values survive row recycling and remain available
@@ -42,6 +44,7 @@ Release-note context for the next release:
   current rules snapshot, avoiding the 256-entry cache used by the older standalone matching APIs.
   Ruleset edits replace that snapshot. A newer activation cancels an unfinished older check; cancellation
   is checked between matches, while each regex retains its 50 ms timeout.
+  Settings-triggered retries restart only matching, preserving the original activation's routing decision.
 - Settings updates capture UTF-8 snapshots on the calling thread and queue them to one background writer. Pending snapshots
   coalesce to the newest complete document. Change events describe the in-memory update; `FlushAsync`
   waits for persistence. Closing settings, exiting, and restarting commit pending arguments and flush
@@ -90,6 +93,8 @@ cancellation, and ruleset row reuse.
 They also cover selector collection identity and reorder/hide updates, realized-row icon concurrency,
 recycled image reference release, and superseded editor preview cancellation. Cache-size assertions await
 the explicit maintenance drain.
+Container checks also cover cleared event data, reassignment, and scrolling an actual 1,000-row ListView
+in an offscreen test window. Drain checks cover active loads and canceled sole waiters.
 
 `Tests/RuleMatchSmoke` accepts `--measure` for a local repeated-matching timing and allocation probe. This
 probe measures the matching API, not whole-application latency or memory use.

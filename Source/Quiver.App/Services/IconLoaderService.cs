@@ -33,12 +33,15 @@ public partial class IconLoaderService : IIconLoader
     private static readonly HttpClient HttpClient = new() { Timeout = TimeSpan.FromSeconds(10) };
     private readonly string cacheDirectory;
     private readonly Dictionary<string, PendingIconLoad> pending = [];
+    // Abandoned requests leave deduplication before their cache work has finished.
+    private readonly HashSet<PendingIconLoad> activeLoads = [];
     private readonly Dictionary<string, LinkedListNode<(string Key, BitmapImage Image, DateTime LoadedAt)>> decoded = [];
     private readonly LinkedList<(string Key, BitmapImage Image, DateTime LoadedAt)> decodedOrder = [];
     private readonly object sync = new();
     private Task diskMaintenanceTask = Task.CompletedTask;
     private bool diskMaintenanceRunning;
     private bool diskMaintenanceRequested;
+    private bool stopping;
 
     private sealed class PendingIconLoad
     {
@@ -88,6 +91,10 @@ public partial class IconLoaderService : IIconLoader
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
+            lock (sync)
+            {
+                if (stopping) return 0;
+            }
             if (string.IsNullOrWhiteSpace(exePath)) return 0;
             string path = Path.GetFullPath(Environment.ExpandEnvironmentVariables(exePath.Trim().Trim('"')));
             if (!File.Exists(path)) return 0;
@@ -148,6 +155,10 @@ public partial class IconLoaderService : IIconLoader
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
+            lock (sync)
+            {
+                if (stopping) return null;
+            }
             if (string.IsNullOrWhiteSpace(path))
             {
                 return null;
@@ -206,6 +217,7 @@ public partial class IconLoaderService : IIconLoader
         bool startLoad = false;
         lock (sync)
         {
+            if (stopping) return null;
             if (decoded.TryGetValue(key, out var node))
             {
                 decodedOrder.Remove(node);
@@ -225,6 +237,7 @@ public partial class IconLoaderService : IIconLoader
             {
                 request = new PendingIconLoad();
                 pending.Add(key, request);
+                activeLoads.Add(request);
                 startLoad = true;
             }
         }
@@ -326,14 +339,15 @@ public partial class IconLoaderService : IIconLoader
         }
         finally
         {
+            request.Cancellation.Dispose();
+            bytes?.Dispose();
             lock (sync)
             {
                 if (pending.TryGetValue(key, out var current) && ReferenceEquals(current, request))
                     pending.Remove(key);
+                activeLoads.Remove(request);
                 request.Completion.SetResult(request.Abandoned ? null : image);
             }
-            request.Cancellation.Dispose();
-            bytes?.Dispose();
         }
     }
 
@@ -458,10 +472,38 @@ public partial class IconLoaderService : IIconLoader
         }
     }
 
-    /// <summary>Waits for disk maintenance scheduled by completed icon loads.</summary>
-    public Task FlushCacheMaintenanceAsync()
+    /// <summary>Drains active icon loads and their disk maintenance after callers stop starting new loads.</summary>
+    public async Task FlushCacheMaintenanceAsync()
     {
-        lock (sync) return diskMaintenanceTask;
+        while (true)
+        {
+            Task[] work;
+            lock (sync)
+            {
+                if (activeLoads.Count == 0 && diskMaintenanceTask.IsCompleted) return;
+                work = activeLoads.Select(load => (Task)load.Completion.Task).Append(diskMaintenanceTask).ToArray();
+            }
+            await Task.WhenAll(work).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Permanently stops new icon loads and drains existing cache work.</summary>
+    public async Task StopAsync()
+    {
+        PendingIconLoad[] loads;
+        lock (sync)
+        {
+            stopping = true;
+            loads = activeLoads.ToArray();
+            foreach (var load in loads) load.Abandoned = true;
+            pending.Clear();
+        }
+        foreach (var load in loads)
+        {
+            try { load.Cancellation.Cancel(); }
+            catch (ObjectDisposedException) { }
+        }
+        await FlushCacheMaintenanceAsync().ConfigureAwait(false);
     }
 
     private async Task MaintainDiskCacheAsync()
