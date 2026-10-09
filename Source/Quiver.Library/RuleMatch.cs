@@ -1,21 +1,42 @@
-﻿using Quiver.Library.Models;
+using Quiver.Library.Models;
 using System.Text.RegularExpressions;
 
 namespace Quiver.Library;
 
 public class RuleMatch
 {
+    private const int CacheLimit = 256;
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(50);
+    private static readonly Dictionary<string, CachedRule> RuleCache = new(StringComparer.Ordinal);
+    private static readonly Queue<string> CacheOrder = new();
+    private static readonly object CacheLock = new();
+
+    private sealed record CachedRule(Rule Rule, Regex? Regex);
+
     public static Ruleset? CheckRulesets(string link, List<Ruleset> rulesets)
     {
+        Uri.TryCreate(link, UriKind.Absolute, out var uri);
         return rulesets.FirstOrDefault(ruleset => ruleset.Rules is { } rules
-            && CheckMultiple(link, rules));
+            && CheckMultiple(link, uri, rules));
     }
 
     public static bool CheckMultiple(string link, List<string> rules)
     {
-        var value = rules.FirstOrDefault(rule => CheckRule(link, rule), null);
+        Uri.TryCreate(link, UriKind.Absolute, out var uri);
+        return CheckMultiple(link, uri, rules);
+    }
 
-        return value != null;
+    private static bool CheckMultiple(string link, Uri? uri, List<string> rules)
+    {
+        foreach (var rule in rules)
+        {
+            if (rule != null && CheckRule(link, uri, GetCachedRule(rule)))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public static bool CheckRule(string link, string? rule)
@@ -24,25 +45,31 @@ public class RuleMatch
         {
             return false;
         }
-        var ruleObj = new Rule(rule);
-        return CheckRule(link, ruleObj);
+
+        Uri.TryCreate(link, UriKind.Absolute, out var uri);
+        return CheckRule(link, uri, GetCachedRule(rule));
     }
 
     public static bool CheckRule(string link, Rule rule)
     {
+        Uri.TryCreate(link, UriKind.Absolute, out var uri);
+        return CheckRule(link, uri, rule.Mode == RuleMode.Regex
+            ? GetCachedRule("r$" + rule.RuleContent)
+            : new CachedRule(rule, null));
+    }
+
+    private static bool CheckRule(string link, Uri? uri, CachedRule cached)
+    {
         try
         {
-            Func<string, string, bool> check = rule.Mode switch
+            return cached.Rule.Mode switch
             {
-                RuleMode.Domain => DomainCheck,
-                RuleMode.Regex => RegexCheck,
-                _ => (link, rule) => link.Equals(rule)
+                RuleMode.Domain => uri != null && DomainMatches(uri.Host, cached.Rule.RuleContent),
+                RuleMode.Regex => cached.Regex?.IsMatch(link) == true,
+                _ => link.Equals(cached.Rule.RuleContent)
             };
-
-            return check(link, rule.RuleContent);
-
         }
-        catch (Exception)
+        catch (RegexMatchTimeoutException)
         {
             return false;
         }
@@ -50,32 +77,55 @@ public class RuleMatch
 
     public static bool DomainCheck(string link, string rule)
     {
-        if (!Uri.TryCreate(link, UriKind.Absolute, out var uri))
-        {
-            return false;
-        }
+        return Uri.TryCreate(link, UriKind.Absolute, out var uri)
+            && DomainMatches(uri.Host, rule);
+    }
 
-        var domain = uri.Host;
-
-        // A rule of the form "*.example.com" matches "example.com" itself
-        // as well as any of its subdomains (e.g. "docs.example.com").
+    private static bool DomainMatches(string domain, string rule)
+    {
         if (rule.StartsWith("*.", StringComparison.Ordinal))
         {
-            var baseDomain = rule[2..];
-
-            return domain.Equals(baseDomain, StringComparison.OrdinalIgnoreCase)
-                || domain.EndsWith("." + baseDomain, StringComparison.OrdinalIgnoreCase);
+            var host = domain.AsSpan();
+            var baseDomain = rule.AsSpan(2);
+            return host.Equals(baseDomain, StringComparison.OrdinalIgnoreCase)
+                || (host.Length > baseDomain.Length
+                    && host[host.Length - baseDomain.Length - 1] == '.'
+                    && host.EndsWith(baseDomain, StringComparison.OrdinalIgnoreCase));
         }
 
         return domain.Equals(rule, StringComparison.OrdinalIgnoreCase);
     }
 
-    // TODO: Timeout the regex rule checks in 50ms or so
-    // Also Add include time taken checks in Test Rules Page
-    private static bool RegexCheck(string link, string rule)
+    private static CachedRule GetCachedRule(string storedRule)
     {
-        var r = new Regex(rule);
-        return r.IsMatch(link);
+        lock (CacheLock)
+        {
+            if (RuleCache.TryGetValue(storedRule, out var cached))
+            {
+                return cached;
+            }
+
+            var rule = new Rule(storedRule);
+            cached = new CachedRule(rule, rule.Mode == RuleMode.Regex ? CreateRegex(rule.RuleContent) : null);
+            if (RuleCache.Count == CacheLimit)
+            {
+                RuleCache.Remove(CacheOrder.Dequeue());
+            }
+            RuleCache.Add(storedRule, cached);
+            CacheOrder.Enqueue(storedRule);
+            return cached;
+        }
+    }
+
+    private static Regex? CreateRegex(string pattern)
+    {
+        try
+        {
+            return new Regex(pattern, RegexOptions.None, RegexTimeout);
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
     }
 }
-

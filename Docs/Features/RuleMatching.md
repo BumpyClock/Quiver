@@ -9,25 +9,26 @@ selection step. Enable **Rule Matching** in **Quiver Settings > Rulesets**, or s
 ## Current Behavior on rule trigger
 
 Quiver checks rules when a URL is passed to the app. The first matching ruleset wins. If no rule matches,
-the selector opens. Holding the [Quick View shortcut](../README.md#quick-view-settings) takes precedence
+the selector opens. Holding the [Quick View shortcut](./QuickView.md) takes precedence
 over rules.
 
 ## Types of rules
 
 - `String`: Matches the entire URL exactly and is case-sensitive. Differences in the scheme, path casing, query string, or trailing slash prevent a match.
 - `Domain`: Simply the domain part of a URL,
-  - example: For the URL `https://github.com/u-c-s/quiver`, `github.com` is the domain.
+  - example: For the URL `https://github.com/bumpyclock/quiver`, `github.com` is the domain.
   - Probably the most useful rule type. By default it matches the host exactly, so `github.com` will not match `docs.github.com`.
   - To also match subdomains, prefix the domain with `*.` — a rule of `*.github.com` matches `github.com` itself
     as well as any subdomain such as `docs.github.com`.
 - `Regex`: Uses .NET regular expressions against the full URL.
   - Matching is case-sensitive by default. use `(?i)` for case-insensitive matching.
   - Use `^` and `$` to anchor a pattern if it must match the whole URL.
+  - Each match has a 50 ms time limit. Invalid patterns and patterns that exceed the limit do not match; Quiver continues to later rules.
 
 > [!NOTE]
 > String and regex rules are matched against the URL including its scheme, such as `https://`.
 > Domain rules contain only the host, without a scheme, path, or port, and compare it case-insensitively.
-> Domain matching requires an absolute URL such as `https://github.com/u-c-s/quiver`.
+> Domain matching requires an absolute URL such as `https://github.com/bumpyclock/quiver`.
 
 ## What about rulesets?
 

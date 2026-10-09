@@ -12,7 +12,7 @@ namespace Quiver.App.ViewModels;
 public partial class RulesetPageViewModel : ObservableObject
 {
     private readonly ISettingsService _settingsService;
-    private readonly List<Browser> browsers;
+    private readonly Dictionary<Guid, string> browserNames;
 
     [ObservableProperty]
     public partial ObservableCollection<Ruleset> Rulesets { get; set; }
@@ -25,10 +25,18 @@ public partial class RulesetPageViewModel : ObservableObject
     public RulesetPageViewModel(ISettingsService settingsService)
     {
         _settingsService = settingsService;
-        browsers = settingsService.LoadSettings().Browsers.ToList();
-        Rulesets = new(settingsService.LoadSettings().Rulesets);
-        AppSettings = settingsService.LoadSettings().AppSettings;
-        RefreshRulesetItems();
+        var settings = settingsService.LoadSettings();
+        browserNames = new Dictionary<Guid, string>();
+        foreach (var browser in settings.Browsers)
+        {
+            browserNames.TryAdd(browser.Id, browser.Name);
+        }
+        Rulesets = new(settings.Rulesets);
+        AppSettings = settings.AppSettings;
+        foreach (var ruleset in Rulesets)
+        {
+            RulesetItems.Add(CreateItem(ruleset));
+        }
     }
 
     public bool Option_RuleMatching
@@ -48,6 +56,7 @@ public partial class RulesetPageViewModel : ObservableObject
     public void NewRuleset(Ruleset ruleset)
     {
         Rulesets.Add(ruleset);
+        RulesetItems.Add(CreateItem(ruleset));
         SaveRulesets();
     }
 
@@ -58,6 +67,7 @@ public partial class RulesetPageViewModel : ObservableObject
         if (index != -1)
         {
             Rulesets[index] = ruleset;
+            RulesetItems[index] = CreateItem(ruleset);
             SaveRulesets();
         }
     }
@@ -69,6 +79,7 @@ public partial class RulesetPageViewModel : ObservableObject
         if (index > 0)
         {
             Rulesets.Move(index, index - 1);
+            RulesetItems.Move(index, index - 1);
             SaveRulesets();
         }
     }
@@ -80,6 +91,7 @@ public partial class RulesetPageViewModel : ObservableObject
         if (index != -1 && index < Rulesets.Count - 1)
         {
             Rulesets.Move(index, index + 1);
+            RulesetItems.Move(index, index + 1);
             SaveRulesets();
         }
     }
@@ -89,7 +101,9 @@ public partial class RulesetPageViewModel : ObservableObject
         var existingRuleset = Rulesets.First(x => x.Id == Id);
         if (existingRuleset != null)
         {
-            Rulesets.Remove(existingRuleset);
+            var index = Rulesets.IndexOf(existingRuleset);
+            Rulesets.RemoveAt(index);
+            RulesetItems.RemoveAt(index);
             SaveRulesets();
         }
     }
@@ -101,27 +115,16 @@ public partial class RulesetPageViewModel : ObservableObject
 
     public string GetBrowserDisplayName(Guid browserId)
     {
-        return browsers.FirstOrDefault(browser => browser.Id == browserId)?.Name
-            ?? "Missing browser";
+        return browserNames.GetValueOrDefault(browserId) ?? "Missing browser";
     }
 
     private void SaveRulesets()
     {
         _settingsService.UpdateRulesets(Rulesets);
-        RefreshRulesetItems();
     }
 
-    private void RefreshRulesetItems()
-    {
-        RulesetItems.Clear();
-
-        foreach (Ruleset ruleset in Rulesets)
-        {
-            RulesetItems.Add(new RulesetItemViewModel(
-                ruleset,
-                GetBrowserDisplayName(ruleset.BrowserId)));
-        }
-    }
+    private RulesetItemViewModel CreateItem(Ruleset ruleset) =>
+        new(ruleset, GetBrowserDisplayName(ruleset.BrowserId));
 }
 
 public sealed record RulesetItemViewModel(Ruleset Model, string BrowserDisplayName);

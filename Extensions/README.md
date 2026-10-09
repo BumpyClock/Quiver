@@ -1,6 +1,7 @@
 # Quiver browser extension
 
 This browser extension uses Native Messaging API to communicate with the Quiver Application.
+The native host accepts messages up to 1 MiB. Larger messages are rejected before the body is read.
 
 ## Installation
 
