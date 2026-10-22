@@ -12,8 +12,25 @@
     mc:Ignorable="d">
     <Grid
         x:Name="DiscRoot"
+        Background="Transparent"
         KeyboardAcceleratorPlacementMode="Hidden"
+        PointerMoved="DiscRoot_PointerMoved"
         PreviewKeyDown="DiscRoot_PreviewKeyDown">
+        <Grid.Resources>
+            <ResourceDictionary>
+                <ResourceDictionary.ThemeDictionaries>
+                    <ResourceDictionary x:Key="Light">
+                        <SolidColorBrush x:Key="SelectionFillBrush" Color="#80FFFFFF" />
+                    </ResourceDictionary>
+                    <ResourceDictionary x:Key="Dark">
+                        <SolidColorBrush x:Key="SelectionFillBrush" Color="#66000000" />
+                    </ResourceDictionary>
+                    <ResourceDictionary x:Key="HighContrast">
+                        <SolidColorBrush x:Key="SelectionFillBrush" Color="Transparent" />
+                    </ResourceDictionary>
+                </ResourceDictionary.ThemeDictionaries>
+            </ResourceDictionary>
+        </Grid.Resources>
         <Grid.KeyboardAccelerators>
             <KeyboardAccelerator Key="C" Invoked="CopyAccelerator_Invoked" />
             <KeyboardAccelerator
@@ -24,48 +41,58 @@
             <KeyboardAccelerator Key="Escape" Invoked="EscapeAccelerator_Invoked" />
         </Grid.KeyboardAccelerators>
 
-
-        <ItemsRepeater
-            x:Name="BrowserRing"
+        <Grid
+            x:Name="FlowerHost"
             HorizontalAlignment="Center"
-            VerticalAlignment="Center"
-            ElementPrepared="BrowserRing_ElementPrepared"
-            ElementIndexChanged="BrowserRing_ElementIndexChanged"
-            ItemsSource="{x:Bind ViewModel.Browsers, Mode=OneWay}"
-            TabFocusNavigation="Local">
-            <ItemsRepeater.Layout>
-                <controls:RadialLayout />
-            </ItemsRepeater.Layout>
-            <ItemsRepeater.ItemTemplate>
-                <DataTemplate x:DataType="viewModels:BrowserItemViewModel">
-                    <controls:RadialBrowserItem BrowserItem="{x:Bind}" />
-                </DataTemplate>
-            </ItemsRepeater.ItemTemplate>
-        </ItemsRepeater>
+            VerticalAlignment="Top">
+            <Path
+                x:Name="SelectionOutline"
+                Fill="{ThemeResource SelectionFillBrush}"
+                IsHitTestVisible="False"
+                Stroke="{ThemeResource TextFillColorPrimaryBrush}"
+                StrokeLineJoin="Round"
+                StrokeThickness="2" />
+
+            <ItemsRepeater
+                x:Name="BrowserRing"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                ElementIndexChanged="BrowserRing_ElementIndexChanged"
+                ElementPrepared="BrowserRing_ElementPrepared"
+                ItemsSource="{x:Bind ViewModel.Browsers, Mode=OneWay}"
+                TabFocusNavigation="Once">
+                <ItemsRepeater.Layout>
+                    <controls:RadialLayout />
+                </ItemsRepeater.Layout>
+                <ItemsRepeater.ItemTemplate>
+                    <DataTemplate x:DataType="viewModels:BrowserItemViewModel">
+                        <controls:RadialBrowserItem BrowserItem="{x:Bind}" />
+                    </DataTemplate>
+                </ItemsRepeater.ItemTemplate>
+            </ItemsRepeater>
+        </Grid>
 
         <Button
-            x:Name="HubButton"
-            Width="100"
-            Height="100"
-            Padding="8"
+            x:Name="NamePill"
+            Padding="16,0"
             HorizontalAlignment="Center"
-            VerticalAlignment="Center"
+            VerticalAlignment="Top"
+            HorizontalContentAlignment="Stretch"
             AutomationProperties.Name="Link options"
-            BorderThickness="1"
-            CornerRadius="50"
+            BorderThickness="0"
+            CornerRadius="12"
             ToolTipService.ToolTip="{x:Bind ViewModel.Url, Mode=OneWay}">
             <Button.Resources>
                 <ResourceDictionary>
                     <StaticResource x:Key="ButtonBackground" ResourceKey="SubtleFillColorTransparentBrush" />
-                    <StaticResource x:Key="ButtonBorderBrush" ResourceKey="SubtleFillColorTransparentBrush" />
                     <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="SubtleFillColorSecondaryBrush" />
                     <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="SubtleFillColorTertiaryBrush" />
                 </ResourceDictionary>
             </Button.Resources>
             <Button.Flyout>
                 <MenuFlyout
-                    x:Name="HubMenu"
-                    Opening="HubMenu_Opening"
+                    x:Name="LinkMenu"
+                    Opening="LinkMenu_Opening"
                     Placement="Bottom"
                     ShouldConstrainToRootBounds="False">
                     <MenuFlyoutItem
@@ -108,25 +135,33 @@
                     </MenuFlyoutItem>
                 </MenuFlyout>
             </Button.Flyout>
-            <StackPanel VerticalAlignment="Center" Spacing="2">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                 <TextBlock
-                    x:Name="HubTitle"
+                    x:Name="PillTitle"
                     HorizontalAlignment="Center"
-                    FontSize="13"
-                    FontWeight="SemiBold"
-                    MaxLines="2"
-                    Style="{StaticResource BodyStrongTextBlockStyle}"
-                    TextAlignment="Center"
-                    TextTrimming="CharacterEllipsis"
-                    TextWrapping="Wrap" />
-                <TextBlock
-                    x:Name="HubSubtitle"
-                    HorizontalAlignment="Center"
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                     MaxLines="1"
-                    Style="{StaticResource CaptionTextBlockStyle}"
-                    TextAlignment="Center"
-                    TextTrimming="CharacterEllipsis" />
+                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                    TextTrimming="CharacterEllipsis"
+                    TextWrapping="NoWrap" />
+                <StackPanel
+                    x:Name="PillLink"
+                    HorizontalAlignment="Center"
+                    Orientation="Horizontal"
+                    Spacing="4">
+                    <FontIcon
+                        x:Name="PillLock"
+                        VerticalAlignment="Center"
+                        FontSize="10"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Glyph="&#xE72E;" />
+                    <TextBlock
+                        x:Name="PillHost"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        MaxLines="1"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        TextTrimming="CharacterEllipsis"
+                        TextWrapping="NoWrap" />
+                </StackPanel>
             </StackPanel>
         </Button>
 

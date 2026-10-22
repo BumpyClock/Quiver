@@ -10,7 +10,8 @@ internal static partial class CursorPosition
     private const int MdtEffectiveDpi = 0;
     private const double DefaultDpi = 96;
 
-    public static RectInt32 SquareCenteredOnCursor(double sizeDips)
+    /// <summary>Places a window of the given size so that <paramref name="anchorDips"/> lands on the cursor, kept within the work area.</summary>
+    public static RectInt32 AnchoredAtCursor(double widthDips, double heightDips, global::Windows.Foundation.Point anchorDips)
     {
         if (!GetCursorPos(out var cursor))
         {
@@ -34,16 +35,17 @@ internal static partial class CursorPosition
             }
         }
 
-        int size = (int)Math.Round(sizeDips * scale);
-        int x = cursor.X - size / 2;
-        int y = cursor.Y - size / 2;
+        int width = (int)Math.Round(widthDips * scale);
+        int height = (int)Math.Round(heightDips * scale);
+        int x = cursor.X - (int)Math.Round(anchorDips.X * scale);
+        int y = cursor.Y - (int)Math.Round(anchorDips.Y * scale);
         if (workArea is { } area)
         {
-            x = Math.Clamp(x, area.Left, Math.Max(area.Left, area.Right - size));
-            y = Math.Clamp(y, area.Top, Math.Max(area.Top, area.Bottom - size));
+            x = Math.Clamp(x, area.Left, Math.Max(area.Left, area.Right - width));
+            y = Math.Clamp(y, area.Top, Math.Max(area.Top, area.Bottom - height));
         }
 
-        return new RectInt32(x, y, size, size);
+        return new RectInt32(x, y, width, height);
     }
 
     [LibraryImport("user32.dll")]

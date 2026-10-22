@@ -1,8 +1,10 @@
 using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.Effects;
+using Microsoft.Graphics.Canvas.Geometry;
 using Microsoft.UI.Dispatching;
 using System;
 using System.Collections.Generic;
+using Windows.Foundation;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Windows.UI;
@@ -13,7 +15,10 @@ using WinRT;
 
 namespace Quiver.App.Helpers;
 
-internal sealed partial class CircleAcrylicLayer : IDisposable
+/// <summary>
+/// Paints host-backdrop acrylic behind the selector, clipped to the union of its petals and name pill.
+/// </summary>
+internal sealed partial class AcrylicShapeLayer : IDisposable
 {
     private static readonly Guid IID_ICompositorDesktopInterop = new("29E691FA-4567-4DCA-B319-D0F207EB6807");
     private static IntPtr dispatcherQueueController;
@@ -21,17 +26,18 @@ internal sealed partial class CircleAcrylicLayer : IDisposable
     private readonly Compositor compositor;
     private readonly DesktopWindowTarget target;
     private readonly ContainerVisual root;
-    private readonly ContainerVisual plates;
+    private readonly SpriteVisual plate;
+    private readonly ShapeVisual edge;
     private readonly UISettings uiSettings = new();
     private readonly DispatcherQueue dispatcherQueue;
     private readonly bool hostBackdropSupported;
-    private IReadOnlyList<(Vector2 Center, float Radius)> circles = [];
+    private AcrylicShape? shape;
     private bool isDark = true;
     private bool disposed;
     private CompositionEffectFactory? acrylicFactory;
     private bool acrylicFactoryIsDark;
 
-    public CircleAcrylicLayer(IntPtr hwnd)
+    public AcrylicShapeLayer(IntPtr hwnd)
     {
         EnsureDispatcherQueue();
         int useHostBackdrop = 1;
@@ -44,41 +50,52 @@ internal sealed partial class CircleAcrylicLayer : IDisposable
         root.RelativeSizeAdjustment = Vector2.One;
         target.Root = root;
 
-        plates = compositor.CreateContainerVisual();
-        plates.RelativeSizeAdjustment = Vector2.One;
-        root.Children.InsertAtTop(plates);
+        plate = compositor.CreateSpriteVisual();
+        plate.RelativeSizeAdjustment = Vector2.One;
+        root.Children.InsertAtTop(plate);
+
+        edge = compositor.CreateShapeVisual();
+        edge.RelativeSizeAdjustment = Vector2.One;
+        root.Children.InsertAtTop(edge);
 
         uiSettings.AdvancedEffectsEnabledChanged += UISettings_AdvancedEffectsEnabledChanged;
     }
 
-    public void SetCircles(IReadOnlyList<(Vector2 Center, float Radius)> circles, bool dark)
+    public void SetShape(AcrylicShape shape, bool dark)
     {
-        this.circles = circles;
+        this.shape = shape;
         isDark = dark;
-        plates.Children.RemoveAll();
 
-        bool useBlur = hostBackdropSupported && uiSettings.AdvancedEffectsEnabled;
-        foreach (var (center, radius) in circles)
+        // One plate clipped to the union keeps overlapping petals seamless.
+        CanvasGeometry outline = CanvasGeometry.CreateRoundedRectangle(
+            null, shape.Pill, shape.PillCornerRadius, shape.PillCornerRadius);
+        foreach (var (center, radius) in shape.Circles)
         {
-            var plate = compositor.CreateSpriteVisual();
-            plate.Size = new Vector2(radius * 2);
-            plate.Offset = new Vector3(center - new Vector2(radius), 0);
-            plate.Brush = useBlur ? CreateAcrylicBrush() : compositor.CreateColorBrush(FallbackColor);
-            var clipGeometry = compositor.CreateEllipseGeometry();
-            clipGeometry.Center = new Vector2(radius);
-            clipGeometry.Radius = new Vector2(radius);
-            plate.Clip = compositor.CreateGeometricClip(clipGeometry);
-            plates.Children.InsertAtTop(plate);
+            outline = outline.CombineWith(
+                CanvasGeometry.CreateCircle(null, center, radius), Matrix3x2.Identity, CanvasGeometryCombine.Union);
         }
+
+        var path = new CompositionPath(outline);
+        plate.Clip = compositor.CreateGeometricClip(compositor.CreatePathGeometry(path));
+
+        // The window region cuts the outer half of the stroke, leaving a hairline that separates the
+        // acrylic from a backdrop of the same tone.
+        var stroke = compositor.CreateSpriteShape(compositor.CreatePathGeometry(path));
+        stroke.StrokeBrush = compositor.CreateColorBrush(EdgeColor);
+        stroke.StrokeThickness = 2;
+        edge.Shapes.Clear();
+        edge.Shapes.Add(stroke);
+        bool useBlur = hostBackdropSupported && uiSettings.AdvancedEffectsEnabled;
+        plate.Brush = useBlur ? CreateAcrylicBrush() : compositor.CreateColorBrush(FallbackColor);
     }
 
     private void UISettings_AdvancedEffectsEnabledChanged(UISettings sender, object args)
     {
         dispatcherQueue.TryEnqueue(() =>
         {
-            if (!disposed)
+            if (!disposed && shape is not null)
             {
-                SetCircles(circles, isDark);
+                SetShape(shape, isDark);
             }
         });
     }
@@ -137,6 +154,8 @@ internal sealed partial class CircleAcrylicLayer : IDisposable
     private Color LuminosityColor => isDark ? Color.FromArgb(0xD9, 0x2C, 0x2C, 0x2C) : Color.FromArgb(0xD9, 0xFC, 0xFC, 0xFC);
 
     private Color TintColor => isDark ? Color.FromArgb(0x59, 0x2C, 0x2C, 0x2C) : Color.FromArgb(0x59, 0xFC, 0xFC, 0xFC);
+
+    private Color EdgeColor => isDark ? Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0x1A, 0x00, 0x00, 0x00);
 
     private Color FallbackColor => isDark ? Color.FromArgb(0xFF, 0x2C, 0x2C, 0x2C) : Color.FromArgb(0xFF, 0xF9, 0xF9, 0xF9);
 
@@ -218,3 +237,5 @@ internal sealed partial class CircleAcrylicLayer : IDisposable
     private static partial int CreateDispatcherQueueController(DispatcherQueueOptions options, out IntPtr dispatcherQueueController);
     #endregion
 }
+
+internal sealed record AcrylicShape(IReadOnlyList<(Vector2 Center, float Radius)> Circles, Rect Pill, float PillCornerRadius);

@@ -2,7 +2,9 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Quiver.App.Helpers;
 using Quiver.App.Services.Interfaces;
+using Quiver.Library;
 using Quiver.Library.Models;
+using Microsoft.UI.Xaml.Media.Imaging;
 using System;
 using System.Collections.ObjectModel;
 using System.Collections.Generic;
@@ -20,7 +22,7 @@ public partial class SelectorPageViewModel : ObservableObject
     private readonly ISettingsService _settingsService;
     private readonly IIconLoader _iconLoader;
     private CancellationTokenSource? _iconLoadCancellation;
-    private Dictionary<Guid, BrowserDisplayState> _browserStates = [];
+    private Dictionary<(Guid, string?), BrowserDisplayState> _browserStates = [];
     public event EventHandler? BrowserLaunched;
 
     public SelectorPageViewModel(ISettingsService settingsService, IIconLoader iconLoader)
@@ -48,25 +50,49 @@ public partial class SelectorPageViewModel : ObservableObject
 
     public void RefreshBrowsers()
     {
+        var previous = Browsers.GroupBy(item => item.Key)
+            .ToDictionary(group => group.Key, group => group.First());
+        var nextStates = new Dictionary<(Guid, string?), BrowserDisplayState>();
+        var items = _settingsService.LoadSettings().Browsers.Where(browser => !browser.Hidden)
+            .SelectMany(ExpandProfiles)
+            .Select(candidate =>
+            {
+                var (browser, profile) = candidate;
+                var key = (browser.Id, profile?.Directory);
+                var state = BrowserDisplayState.From(browser, profile);
+                nextStates[key] = state;
+                return previous.TryGetValue(key, out var item)
+                    && ReferenceEquals(item.Model, browser)
+                    && _browserStates.TryGetValue(key, out var oldState)
+                    && oldState == state ? item : new BrowserItemViewModel(browser, profile);
+            }).ToArray();
+        _browserStates = nextStates;
+        // The selector refreshes on every open; leave in-flight icon loads alone when nothing changed.
+        if (items.SequenceEqual(Browsers))
+        {
+            return;
+        }
+
         _iconLoadCancellation?.Cancel();
         var cancellation = new CancellationTokenSource();
         _iconLoadCancellation = cancellation;
-        var previous = Browsers.GroupBy(item => item.Model.Id)
-            .ToDictionary(group => group.Key, group => group.First());
-        var nextStates = new Dictionary<Guid, BrowserDisplayState>();
-        var items = _settingsService.LoadSettings().Browsers.Where(browser => !browser.Hidden)
-            .Select(browser =>
-            {
-                var state = BrowserDisplayState.From(browser);
-                nextStates[browser.Id] = state;
-                return previous.TryGetValue(browser.Id, out var item)
-                    && ReferenceEquals(item.Model, browser)
-                    && _browserStates.TryGetValue(browser.Id, out var oldState)
-                    && oldState == state ? item : new BrowserItemViewModel(browser);
-            }).ToArray();
-        _browserStates = nextStates;
         ApplyBrowserItems(items);
         _ = LoadIconsAsync(items, cancellation);
+    }
+
+    // A browser with configured alternate launches or a pinned profile keeps one item; otherwise each
+    // detected profile gets its own item once there is more than one.
+    private static IEnumerable<(Browser Browser, BrowserProfile? Profile)> ExpandProfiles(Browser browser)
+    {
+        bool configured = browser.AlternateLaunches is { Count: > 0 }
+            || browser.LaunchArgs?.Contains("--profile-directory", StringComparison.OrdinalIgnoreCase) == true;
+        IReadOnlyList<BrowserProfile> profiles = configured ? [] : BrowserProfiles.Detect(browser.ExePath);
+        if (profiles.Count < 2)
+        {
+            return [(browser, null)];
+        }
+
+        return profiles.Select(profile => (browser, (BrowserProfile?)profile));
     }
 
     private void ApplyBrowserItems(BrowserItemViewModel[] items)
@@ -82,7 +108,7 @@ public partial class SelectorPageViewModel : ObservableObject
             int sameBrowserIndex = -1;
             for (int index = targetIndex; index < Browsers.Count; index++)
             {
-                if (Browsers[index].Model.Id == item.Model.Id)
+                if (Browsers[index].Key == item.Key)
                 {
                     sameBrowserIndex = index;
                     break;
@@ -125,16 +151,20 @@ public partial class SelectorPageViewModel : ObservableObject
         {
             try
             {
-                await Task.WhenAll(items.Where(item => item.Icon is null).Select(async item =>
+                await Task.WhenAll(items.Where(item => item.Icon is null || NeedsAvatar(item)).Select(async item =>
                 {
                     await concurrency.WaitAsync(cancellation.Token);
                     try
                     {
                         cancellation.Token.ThrowIfCancellationRequested();
-                        var icon = await _iconLoader.LoadIconAsync(item.Model, cancellation.Token);
+                        var icon = item.Icon ?? await _iconLoader.LoadIconAsync(item.Model, cancellation.Token);
+                        var avatar = NeedsAvatar(item)
+                            ? await LoadAvatarAsync(item.Profile!.AvatarPath!, cancellation.Token)
+                            : item.ProfileAvatar;
                         if (!cancellation.IsCancellationRequested)
                         {
                             item.Icon = icon;
+                            item.ProfileAvatar = avatar;
                         }
                     }
                     finally
@@ -158,15 +188,32 @@ public partial class SelectorPageViewModel : ObservableObject
         }
     }
 
+    private static bool NeedsAvatar(BrowserItemViewModel item) =>
+        item.ProfileAvatar is null && !string.IsNullOrEmpty(item.Profile?.AvatarPath);
+
+    private async Task<BitmapImage?> LoadAvatarAsync(string path, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _iconLoader.LoadIconFromImage(path, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Debug.WriteLine($"Could not load profile picture {path}: {ex.Message}");
+            return null;
+        }
+    }
+
     private sealed record BrowserDisplayState(
         string Name, string ExePath, string? LaunchArgs, string? IconPath,
-        BrowserIconSource? IconSource, int? IconIndex, string AlternateLaunches)
+        BrowserIconSource? IconSource, int? IconIndex, string AlternateLaunches, BrowserProfile? Profile)
     {
-        public static BrowserDisplayState From(Browser browser) => new(
+        public static BrowserDisplayState From(Browser browser, BrowserProfile? profile) => new(
             browser.Name, browser.ExePath, browser.LaunchArgs, browser.Icon?.Path,
             browser.Icon?.Source, browser.Icon?.Index,
             string.Join("\u001f", browser.AlternateLaunches?.Select(launch =>
-                $"{launch.Id}\u001e{launch.ItemName}\u001e{launch.LaunchArgs}") ?? []));
+                $"{launch.Id}\u001e{launch.ItemName}\u001e{launch.LaunchArgs}") ?? []),
+            profile);
     }
 
     private IRelayCommand<BrowserItemViewModel>? launchBrowserCommand;
@@ -190,7 +237,14 @@ public partial class SelectorPageViewModel : ObservableObject
         Debug.WriteLine($"Launching {browser.Name} with URL: {Url}");
         try
         {
-            UriLauncher.ResolveAutomatically(Url, browser, null);
+            if (browserItem.ProfileLaunch is AlternateLaunch profileLaunch)
+            {
+                UriLauncher.Alternative(Url, browser, profileLaunch);
+            }
+            else
+            {
+                UriLauncher.Default(Url, browser);
+            }
             BrowserLaunched?.Invoke(this, EventArgs.Empty);
         }
         catch (Exception ex)

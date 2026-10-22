@@ -62,10 +62,11 @@ The following snippet shows the default options:
 
 ## Using the selector
 
-The selector opens centered on the mouse cursor. Each browser is an acrylic petal around the link in the middle, so every browser is the same short move away. Two browsers sit side by side above the link; three or more are spread evenly around it, starting at the top.
+The selector opens centered on the mouse cursor. Each browser is an acrylic petal; the petals overlap into one flower so every browser is the same short move away. Two browsers sit side by side; three or more are spread evenly around the center, starting at the top. An outline reaches from the pointer to the selected petal, and the pill below the flower names it and shows the link's site.
 
-- Click a petal, or press its number (**1**-**9**), to open the link in that browser. Hover a petal to see the browser's name.
+- The first petal is selected when the selector opens, so **Enter** opens the link there. Hover a petal or use the arrow keys to move the selection.
+- Click a petal, or press its number (**1**-**9**), to open the link in that browser.
+- Microsoft Edge with more than one profile shows a petal per profile, badged with the profile picture. See [browser profiles](./Features/BrowserConfiguration.md#browser-profiles).
 - Right-click a petal to pick one of its [alternate launches](./Features/BrowserConfiguration.md).
-- Use the arrow keys to move between petals and **Enter** to open.
-- Click the link in the middle to copy it (**C**), edit it (**Alt+E**), open it in [Quick View](./Features/QuickView.md), or open **Rules** (**R**) and **Settings**.
+- Click the pill to copy the link (**C**), edit it (**Alt+E**), open it in [Quick View](./Features/QuickView.md), or open **Rules** (**R**) and **Settings**.
 - Press **Esc** or click outside the selector to close it.

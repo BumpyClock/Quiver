@@ -4,41 +4,70 @@ using Windows.Foundation;
 
 namespace Quiver.App.Controls;
 
-public readonly record struct RadialMetrics(int Count, double RingRadius, double OuterRadius, double WindowSize)
+/// <summary>
+/// Geometry shared by the selector's XAML layout, window region, and acrylic shape. Petals overlap their
+/// neighbors and a center disc fills the gap between them; the name pill sits below the flower.
+/// </summary>
+public readonly record struct RadialMetrics(int Count, double RingRadius, double OuterRadius)
 {
-    public const double ItemSize = 80;
-    public const double HubRadius = 50;
+    public const double ItemSize = 100;
+    public const double PetalRadius = ItemSize / 2;
+    public const double PillHeight = 48;
+    public const double PillCornerRadius = 12;
+    private const double MinPillWidth = 220;
+    private const double MaxPillWidth = 320;
+    private const double PillGap = 8;
     private const double WindowMargin = 4;
-    private const double PetalGap = 10;
-    private const double HubGap = 8;
+    // Ring radius as a multiple of the petal radius when few petals leave room to spare.
+    private const double MinRingRatio = 1.2;
+    // Half the distance between neighboring petal centers, as a fraction of the petal radius.
+    private const double NeighborSpacing = 0.85;
 
     public static RadialMetrics For(int count)
     {
-        double petalRadius = ItemSize / 2;
-        double ringRadius = HubRadius + HubGap + petalRadius;
-        if (count >= 2)
+        double ringRadius = count switch
         {
-            ringRadius = Math.Max(ringRadius, (petalRadius + PetalGap / 2) / Math.Sin(Math.PI / count));
+            <= 1 => 0,
+            2 => MinRingRatio * PetalRadius,
+            _ => Math.Max(MinRingRatio * PetalRadius, NeighborSpacing * PetalRadius / Math.Sin(Math.PI / count))
+        };
+
+        return new RadialMetrics(count, ringRadius, count == 0 ? 0 : ringRadius + PetalRadius);
+    }
+
+    public double FlowerSize => 2 * OuterRadius;
+
+    public double CenterFillRadius => Count > 1 ? RingRadius - PetalRadius / 2 : 0;
+
+    public double PillWidth => Math.Clamp(FlowerSize, MinPillWidth, MaxPillWidth);
+
+    public double FlowerTop => WindowMargin;
+
+    public double PillTop => FlowerTop + FlowerSize + PillGap;
+
+    public double WindowWidth => Math.Max(FlowerSize, PillWidth) + 2 * WindowMargin;
+
+    public double WindowHeight => PillTop + PillHeight + WindowMargin;
+
+    /// <summary>The flower center in window coordinates; it opens under the cursor.</summary>
+    public Point FlowerCenter => new(WindowWidth / 2, FlowerTop + OuterRadius);
+
+    public Rect PillBounds => new((WindowWidth - PillWidth) / 2, PillTop, PillWidth, PillHeight);
+
+    /// <summary>Direction from the flower center to the petal, in radians clockwise from the positive x axis.</summary>
+    public double ItemAngle(int index)
+    {
+        if (Count == 2)
+        {
+            return index == 0 ? Math.PI : 0;
         }
 
-        double outerRadius = ringRadius + petalRadius;
-        return new RadialMetrics(count, ringRadius, outerRadius, 2 * (outerRadius + WindowMargin));
+        return -Math.PI / 2 + 2 * Math.PI * index / Math.Max(Count, 1);
     }
 
     public Point ItemCenter(int index, Point origin)
     {
-        const double top = -Math.PI / 2;
-        double angle;
-        if (Count == 2)
-        {
-            double halfSpread = Math.Asin((ItemSize / 2 + PetalGap / 2) / RingRadius);
-            angle = top + (index == 0 ? -halfSpread : halfSpread);
-        }
-        else
-        {
-            angle = top + 2 * Math.PI * index / Math.Max(Count, 1);
-        }
-
+        double angle = ItemAngle(index);
         return new Point(origin.X + RingRadius * Math.Cos(angle), origin.Y + RingRadius * Math.Sin(angle));
     }
 }
@@ -53,8 +82,7 @@ public sealed partial class RadialLayout : NonVirtualizingLayout
             child.Measure(new Size(RadialMetrics.ItemSize, RadialMetrics.ItemSize));
         }
 
-        double size = 2 * metrics.OuterRadius;
-        return new Size(size, size);
+        return new Size(metrics.FlowerSize, metrics.FlowerSize);
     }
 
     protected override Size ArrangeOverride(NonVirtualizingLayoutContext context, Size finalSize)
