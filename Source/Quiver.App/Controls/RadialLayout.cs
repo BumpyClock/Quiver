@@ -18,16 +18,16 @@ public readonly record struct RadialMetrics(int Count, double RingRadius, double
     private const double MaxPillWidth = 320;
     private const double PillGap = 8;
     private const double WindowMargin = 4;
-    private const double MinRingRatio = 1.2;
-    private const double NeighborSpacing = 0.85;
+    private const double MinRingRadius = 1.2 * PetalRadius;
+    private const double HalfNeighborDistance = 0.85 * PetalRadius;
 
     public static RadialMetrics For(int count)
     {
         double ringRadius = count switch
         {
             <= 1 => 0,
-            2 => MinRingRatio * PetalRadius,
-            _ => Math.Max(MinRingRatio * PetalRadius, NeighborSpacing * PetalRadius / Math.Sin(Math.PI / count))
+            2 => MinRingRadius,
+            _ => Math.Max(MinRingRadius, HalfNeighborDistance / Math.Sin(Math.PI / count))
         };
 
         return new RadialMetrics(count, ringRadius, count == 0 ? 0 : ringRadius + PetalRadius);
@@ -49,6 +49,12 @@ public readonly record struct RadialMetrics(int Count, double RingRadius, double
 
     /// <summary>The flower center in window coordinates; it opens under the cursor.</summary>
     public Point FlowerCenter => new(WindowWidth / 2, FlowerTop + OuterRadius);
+
+    public bool IsInsideFlower(Point pointInFlower)
+    {
+        double dx = pointInFlower.X - OuterRadius, dy = pointInFlower.Y - OuterRadius;
+        return dx * dx + dy * dy <= OuterRadius * OuterRadius;
+    }
 
     public Rect PillBounds => new((WindowWidth - PillWidth) / 2, PillTop, PillWidth, PillHeight);
 

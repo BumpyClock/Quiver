@@ -67,8 +67,7 @@ public partial class SelectorPageViewModel : ObservableObject
                     && oldState == state ? item : new BrowserItemViewModel(browser, profile);
             }).ToArray();
         _browserStates = nextStates;
-        if (items.SequenceEqual(Browsers)
-            && (_iconLoadCancellation is not null || !items.Any(item => item.Icon is null || NeedsAvatar(item))))
+        if (items.SequenceEqual(Browsers) && !NeedsIconLoad(items))
         {
             return;
         }
@@ -185,6 +184,9 @@ public partial class SelectorPageViewModel : ObservableObject
             }
         }
     }
+
+    private bool NeedsIconLoad(BrowserItemViewModel[] items) =>
+        _iconLoadCancellation is null && items.Any(item => item.Icon is null || NeedsAvatar(item));
 
     private static bool NeedsAvatar(BrowserItemViewModel item) =>
         item.ProfileAvatar is null && !string.IsNullOrEmpty(item.Profile?.AvatarPath);
