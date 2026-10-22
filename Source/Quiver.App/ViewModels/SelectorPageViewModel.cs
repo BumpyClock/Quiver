@@ -67,8 +67,10 @@ public partial class SelectorPageViewModel : ObservableObject
                     && oldState == state ? item : new BrowserItemViewModel(browser, profile);
             }).ToArray();
         _browserStates = nextStates;
-        // The selector refreshes on every open; leave in-flight icon loads alone when nothing changed.
-        if (items.SequenceEqual(Browsers))
+        // The selector refreshes on every open. When nothing changed, leave an in-flight load alone and
+        // otherwise retry only icons or profile pictures that are still missing.
+        if (items.SequenceEqual(Browsers)
+            && (_iconLoadCancellation is not null || !items.Any(item => item.Icon is null || NeedsAvatar(item))))
         {
             return;
         }
