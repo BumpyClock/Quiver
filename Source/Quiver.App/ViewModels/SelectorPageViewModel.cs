@@ -67,8 +67,6 @@ public partial class SelectorPageViewModel : ObservableObject
                     && oldState == state ? item : new BrowserItemViewModel(browser, profile);
             }).ToArray();
         _browserStates = nextStates;
-        // The selector refreshes on every open. When nothing changed, leave an in-flight load alone and
-        // otherwise retry only icons or profile pictures that are still missing.
         if (items.SequenceEqual(Browsers)
             && (_iconLoadCancellation is not null || !items.Any(item => item.Icon is null || NeedsAvatar(item))))
         {
@@ -82,8 +80,6 @@ public partial class SelectorPageViewModel : ObservableObject
         _ = LoadIconsAsync(items, cancellation);
     }
 
-    // A browser with configured alternate launches or a pinned profile keeps one item; otherwise each
-    // detected profile gets its own item once there is more than one.
     private static IEnumerable<(Browser Browser, BrowserProfile? Profile)> ExpandProfiles(Browser browser)
     {
         bool configured = browser.AlternateLaunches is { Count: > 0 }

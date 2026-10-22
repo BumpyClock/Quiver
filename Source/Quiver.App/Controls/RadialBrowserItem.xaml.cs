@@ -46,7 +46,6 @@ public sealed partial class RadialBrowserItem : UserControl
 
     public Visibility ProfileBadgeVisibility => BrowserItem?.Profile is null ? Visibility.Collapsed : Visibility.Visible;
 
-    // The name pill shows the item name, so the tooltip only surfaces alternate launches.
     public string? ToolTipText => BrowserItem?.AlternateLaunches is { Count: > 0 } launches
         ? "Right-click for " + string.Join(", ", launches.Select(launch => launch.ItemName))
         : null;

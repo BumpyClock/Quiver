@@ -35,7 +35,6 @@ public sealed partial class SelectorWindow : Window
 {
     private static readonly TimeSpan OpenAnimationDuration = TimeSpan.FromMilliseconds(180);
     private static readonly UISettings AnimationSettings = new();
-    // Gap between the selection outline and the petal edge, and the radius of the tail's rounded tip.
     private const double OutlineInset = 3;
     private const double OutlineTipRounding = 8;
 
@@ -49,7 +48,6 @@ public sealed partial class SelectorWindow : Window
     private bool isHiddenToTray = true;
     private RadialMetrics metrics;
     private int selectedIndex;
-    // Where the selection outline's tail points, in flower coordinates; it follows the pointer.
     private Point outlineTip;
     private Vector3KeyFrameAnimation? openScaleAnimation;
     private ScalarKeyFrameAnimation? openOpacityAnimation;
@@ -147,11 +145,9 @@ public sealed partial class SelectorWindow : Window
 
     public void ShowWindow()
     {
-        // Picks up browser profiles added or removed since the selector last opened.
         ViewModel.RefreshBrowsers();
         isHiddenToTray = false;
         ApplyMetrics();
-        // The flower opens under the cursor, so the tail starts at its center until the pointer moves.
         outlineTip = new Point(metrics.OuterRadius, metrics.OuterRadius);
         Select(0);
         var bounds = CursorPosition.AnchoredAtCursor(metrics.WindowWidth, metrics.WindowHeight, metrics.FlowerCenter);
@@ -266,7 +262,6 @@ public sealed partial class SelectorWindow : Window
         acrylicLayer.PlayOpenAnimation(
             new Vector2((float)metrics.FlowerCenter.X, (float)metrics.FlowerCenter.Y) * scale, OpenAnimationDuration);
 
-        // Everything grows out of the flower center, including the pill below it.
         var flowerVisual = ElementCompositionPreview.GetElementVisual(FlowerHost);
         EnsureOpenAnimations(flowerVisual.Compositor);
         var scaleAnimation = openScaleAnimation!;
@@ -303,8 +298,6 @@ public sealed partial class SelectorWindow : Window
     #endregion
 
     #region Selection
-    // A circle around the selected petal that tapers to a rounded point at the tip, like a drop pulled
-    // toward the pointer. A tip inside the circle leaves just the circle.
     private static Geometry CreateOutlineGeometry(Point center, Point tip)
     {
         double radius = RadialMetrics.PetalRadius - OutlineInset;
@@ -316,7 +309,6 @@ public sealed partial class SelectorWindow : Window
             return new EllipseGeometry { Center = center, RadiusX = radius, RadiusY = radius };
         }
 
-        // The tangent points sit where the radius meets the tail's straight sides at right angles.
         double toTip = Math.Atan2(dy, dx);
         double spread = Math.Acos(radius / distance);
         Point OnCircle(double angle) => new(center.X + radius * Math.Cos(angle), center.Y + radius * Math.Sin(angle));
@@ -368,7 +360,6 @@ public sealed partial class SelectorWindow : Window
     {
         var position = e.GetCurrentPoint(FlowerHost).Position;
         double dx = position.X - metrics.OuterRadius, dy = position.Y - metrics.OuterRadius;
-        // Over the pill the tail would stretch across the flower; keep the last tip instead.
         if (dx * dx + dy * dy > metrics.OuterRadius * metrics.OuterRadius)
         {
             return;
@@ -443,7 +434,6 @@ public sealed partial class SelectorWindow : Window
         }
 
         Select(index);
-        // Hovering moves focus along with the outline so Enter launches what the outline points at.
         if (GetFocusedItemIndex() is >= 0 and var focused && focused != index)
         {
             item.FocusItem(FocusState.Programmatic);

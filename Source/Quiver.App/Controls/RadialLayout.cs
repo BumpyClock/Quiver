@@ -18,9 +18,7 @@ public readonly record struct RadialMetrics(int Count, double RingRadius, double
     private const double MaxPillWidth = 320;
     private const double PillGap = 8;
     private const double WindowMargin = 4;
-    // Ring radius as a multiple of the petal radius when few petals leave room to spare.
     private const double MinRingRatio = 1.2;
-    // Half the distance between neighboring petal centers, as a fraction of the petal radius.
     private const double NeighborSpacing = 0.85;
 
     public static RadialMetrics For(int count)

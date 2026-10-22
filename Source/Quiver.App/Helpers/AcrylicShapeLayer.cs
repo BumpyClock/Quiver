@@ -15,9 +15,6 @@ using WinRT;
 
 namespace Quiver.App.Helpers;
 
-/// <summary>
-/// Paints host-backdrop acrylic behind the selector, clipped to the union of its petals and name pill.
-/// </summary>
 internal sealed partial class AcrylicShapeLayer : IDisposable
 {
     private static readonly Guid IID_ICompositorDesktopInterop = new("29E691FA-4567-4DCA-B319-D0F207EB6807");
@@ -66,7 +63,6 @@ internal sealed partial class AcrylicShapeLayer : IDisposable
         this.shape = shape;
         isDark = dark;
 
-        // One plate clipped to the union keeps overlapping petals seamless.
         CanvasGeometry outline = CanvasGeometry.CreateRoundedRectangle(
             null, shape.Pill, shape.PillCornerRadius, shape.PillCornerRadius);
         foreach (var (center, radius) in shape.Circles)

@@ -10,7 +10,6 @@ internal static partial class CursorPosition
     private const int MdtEffectiveDpi = 0;
     private const double DefaultDpi = 96;
 
-    /// <summary>Places a window of the given size so that <paramref name="anchorDips"/> lands on the cursor, kept within the work area.</summary>
     public static RectInt32 AnchoredAtCursor(double widthDips, double heightDips, global::Windows.Foundation.Point anchorDips)
     {
         if (!GetCursorPos(out var cursor))
