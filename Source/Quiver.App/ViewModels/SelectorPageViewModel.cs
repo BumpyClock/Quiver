@@ -82,7 +82,8 @@ public partial class SelectorPageViewModel : ObservableObject
     private static IEnumerable<(Browser Browser, BrowserProfile? Profile)> ExpandProfiles(Browser browser)
     {
         bool configured = browser.AlternateLaunches is { Count: > 0 }
-            || browser.LaunchArgs?.Contains("--profile-directory", StringComparison.OrdinalIgnoreCase) == true;
+            || browser.LaunchArgs?.Contains("--profile-directory", StringComparison.OrdinalIgnoreCase) == true
+            || browser.LaunchArgs?.Contains("--user-data-dir", StringComparison.OrdinalIgnoreCase) == true;
         IReadOnlyList<BrowserProfile> profiles = configured ? [] : BrowserProfiles.Detect(browser.ExePath);
         if (profiles.Count < 2)
         {

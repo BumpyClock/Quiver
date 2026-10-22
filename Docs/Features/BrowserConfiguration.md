@@ -89,7 +89,7 @@ the browser's own `LaunchArgs`.
 - Quiver reads the profile list from Edge's `Local State` file each time the selector opens, so new, renamed, and
   removed profiles appear without changing settings. Nothing is written to `UserSettings.json`.
 - Profiles are listed in Edge's own order. Guest and other temporary profiles are skipped.
-- A browser entry with `AlternateLaunches`, or with `--profile-directory` in its `LaunchArgs`, keeps a single petal.
+- A browser entry with `AlternateLaunches`, or with `--profile-directory` or `--user-data-dir` in its `LaunchArgs`, keeps a single petal.
   Your configured launches take precedence over detected profiles.
 - Detected profiles are selector-only. To target a profile from a ruleset or Quick View, add it as an alternate
   launch with `--profile-directory="<folder>"`, using the folder name under `%LOCALAPPDATA%\Microsoft\Edge\User Data`.

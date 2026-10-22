@@ -70,15 +70,13 @@ public static class BrowserProfiles
             return [];
         }
 
-        var order = new List<string>();
-        if (profile.TryGetProperty("profiles_order", out var profilesOrder) && profilesOrder.ValueKind == JsonValueKind.Array)
-        {
-            order.AddRange(profilesOrder.EnumerateArray()
-                .Where(entry => entry.ValueKind == JsonValueKind.String)
-                .Select(entry => entry.GetString()!));
-        }
-
-        order.AddRange(infoCache.EnumerateObject().Select(entry => entry.Name).Where(name => !order.Contains(name)));
+        IEnumerable<string> listed = profile.TryGetProperty("profiles_order", out var profilesOrder)
+            && profilesOrder.ValueKind == JsonValueKind.Array
+                ? profilesOrder.EnumerateArray()
+                    .Where(entry => entry.ValueKind == JsonValueKind.String)
+                    .Select(entry => entry.GetString()!)
+                : [];
+        var order = listed.Concat(infoCache.EnumerateObject().Select(entry => entry.Name)).Distinct();
 
         var profiles = new List<BrowserProfile>();
         foreach (string directory in order)
