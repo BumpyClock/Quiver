@@ -22,7 +22,7 @@ Configure it in **Quiver Settings > Quick View**, or add the following top-level
 }
 ```
 
-- `Enabled` controls both the shortcut and the **Quick View** item in the selector's center menu.
+- `Enabled` controls both the shortcut and the **Quick View** item in the selector's link menu.
 - `LaunchMode` is `WebView` for the built-in preview or `Browser` to launch a configured browser directly. The selector's **Quick View** item uses this setting too.
 - `ModifierKeys` supports `Alt`, `CtrlAlt`, or `Ctrl`.
 - `BrowserId` selects a browser by its `Id` when `LaunchMode` is `Browser`. 

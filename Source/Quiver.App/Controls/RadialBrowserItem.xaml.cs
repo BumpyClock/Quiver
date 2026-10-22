@@ -1,35 +1,18 @@
 using Quiver.App.ViewModels;
 using Quiver.Library.Models;
-using Microsoft.UI.Composition;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Input;
 using System;
 using System.Linq;
-using System.Numerics;
-using Windows.UI.ViewManagement;
 
 namespace Quiver.App.Controls;
 
 public sealed partial class RadialBrowserItem : UserControl
 {
-    private const float HighlightScale = 1.15f;
-    private static readonly TimeSpan ScaleAnimationDuration = TimeSpan.FromMilliseconds(140);
-    private static readonly UISettings AnimationSettings = new();
-
-    private bool isPointerOver;
-    private bool isFocused;
-    private bool isHighlighted;
-    private Compositor? animationCompositor;
-    private Vector3KeyFrameAnimation? scaleAnimation;
-    private CubicBezierEasingFunction? scaleEasing;
-
     public RadialBrowserItem()
     {
         InitializeComponent();
-        BrowserIcon.SizeChanged += (_, _) => ElementCompositionPreview.GetElementVisual(BrowserIcon).CenterPoint =
-            new Vector3((float)BrowserIcon.ActualWidth / 2, (float)BrowserIcon.ActualHeight / 2, 0);
     }
 
     #region Public API
@@ -61,24 +44,20 @@ public sealed partial class RadialBrowserItem : UserControl
 
     public Visibility ShortcutVisibility => ShortcutNumber is >= 1 and <= 9 ? Visibility.Visible : Visibility.Collapsed;
 
-    public string ToolTipText
-    {
-        get
-        {
-            string name = BrowserItem?.Name ?? string.Empty;
-            string shortcut = ShortcutNumber is >= 1 and <= 9 ? $" ({ShortcutNumber})" : string.Empty;
-            string more = BrowserItem?.AlternateLaunches is { Count: > 0 } launches
-                ? "\nRight-click for " + string.Join(", ", launches.Select(launch => launch.ItemName))
-                : string.Empty;
-            return name + shortcut + more;
-        }
-    }
+    public Visibility ProfileBadgeVisibility => BrowserItem?.Profile is null ? Visibility.Collapsed : Visibility.Visible;
+
+    public string? ToolTipText => BrowserItem?.AlternateLaunches is { Count: > 0 } launches
+        ? "Right-click for " + string.Join(", ", launches.Select(launch => launch.ItemName))
+        : null;
 
     public event EventHandler<BrowserItemViewModel>? LaunchRequested;
 
+    /// <summary>Raised when the pointer enters the item or it receives focus.</summary>
+    public event EventHandler? SelectRequested;
+
     public event EventHandler<AlternateLaunchRequestedEventArgs>? AlternateLaunchRequested;
 
-    public void FocusItem() => LaunchButton.Focus(FocusState.Keyboard);
+    public void FocusItem(FocusState focusState) => LaunchButton.Focus(focusState);
     #endregion
 
     #region Event handlers
@@ -99,29 +78,9 @@ public sealed partial class RadialBrowserItem : UserControl
         }
     }
 
-    private void LaunchButton_PointerEntered(object sender, PointerRoutedEventArgs e)
-    {
-        isPointerOver = true;
-        UpdateHighlight();
-    }
+    private void LaunchButton_PointerEntered(object sender, PointerRoutedEventArgs e) => SelectRequested?.Invoke(this, EventArgs.Empty);
 
-    private void LaunchButton_PointerExited(object sender, PointerRoutedEventArgs e)
-    {
-        isPointerOver = false;
-        UpdateHighlight();
-    }
-
-    private void LaunchButton_GotFocus(object sender, RoutedEventArgs e)
-    {
-        isFocused = LaunchButton.FocusState == FocusState.Keyboard;
-        UpdateHighlight();
-    }
-
-    private void LaunchButton_LostFocus(object sender, RoutedEventArgs e)
-    {
-        isFocused = false;
-        UpdateHighlight();
-    }
+    private void LaunchButton_GotFocus(object sender, RoutedEventArgs e) => SelectRequested?.Invoke(this, EventArgs.Empty);
     #endregion
 
     #region Alternate launches
@@ -143,46 +102,6 @@ public sealed partial class RadialBrowserItem : UserControl
         }
 
         return flyout;
-    }
-    #endregion
-
-    #region Highlight
-    private void UpdateHighlight()
-    {
-        bool highlighted = isPointerOver || isFocused;
-        if (highlighted == isHighlighted)
-        {
-            return;
-        }
-
-        isHighlighted = highlighted;
-        AnimateScale(highlighted ? HighlightScale : 1f);
-    }
-
-    private void AnimateScale(float scale)
-    {
-        var visual = ElementCompositionPreview.GetElementVisual(BrowserIcon);
-        var target = new Vector3(scale, scale, 1);
-        if (!AnimationSettings.AnimationsEnabled)
-        {
-            visual.StopAnimation("Scale");
-            visual.Scale = target;
-            return;
-        }
-
-        if (!ReferenceEquals(animationCompositor, visual.Compositor))
-        {
-            animationCompositor = visual.Compositor;
-            scaleAnimation = animationCompositor.CreateVector3KeyFrameAnimation();
-            scaleEasing = animationCompositor.CreateCubicBezierEasingFunction(
-                new Vector2(0.16f, 1f),
-                new Vector2(0.3f, 1f));
-        }
-
-        var animation = scaleAnimation!;
-        animation.InsertKeyFrame(1f, target, scaleEasing!);
-        animation.Duration = ScaleAnimationDuration;
-        visual.StartAnimation("Scale", animation);
     }
     #endregion
 }

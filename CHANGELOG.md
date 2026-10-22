@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Redesign the selector as an overlapping acrylic flower with a selection outline that reaches from the pointer to the chosen petal, a centered number badge on each icon, and a pill below that names the selection and shows the link's site. Clicking the pill opens the link actions, and the first petal is preselected so **Enter** opens it.
+- Show a petal per Microsoft Edge profile, with the profile picture, when Edge has more than one profile. Browsers with configured alternate launches are unchanged.
 - Run prepared rule matching in the background and preserve activation routing when settings restart a pending check.
 - Reduce encoded icon allocations, coalesce cache maintenance, and drain pending icon work on normal exit or restart.
 - Load browser-settings icons for realized rows and release them reliably when containers recycle.
