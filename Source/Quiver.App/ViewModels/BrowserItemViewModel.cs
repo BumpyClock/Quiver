@@ -21,7 +21,7 @@ public partial class BrowserItemViewModel(Browser model, BrowserProfile? profile
 
     public string Name => Profile is null ? Model.Name : $"{Model.Name} ({Profile.Name})";
 
-    public string ShortName => Profile?.Name ?? Model.Name;
+    public string ShortName => string.IsNullOrWhiteSpace(Profile?.Name) ? Model.Name : Profile.Name;
 
     public string ProfileInitial => Profile is null || Profile.Name.Length == 0
         ? string.Empty

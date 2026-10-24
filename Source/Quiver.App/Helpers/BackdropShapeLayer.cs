@@ -29,9 +29,11 @@ internal sealed partial class BackdropShapeLayer : IDisposable
     private readonly DesktopWindowTarget target;
     private readonly DispatcherQueue dispatcherQueue;
     private readonly UISettings uiSettings = new();
+    private readonly AccessibilitySettings accessibilitySettings = new();
     private readonly ContainerVisual root;
     private readonly CompositionPathGeometry outlineGeometry;
     private readonly CompositionColorBrush fallbackBrush;
+    private readonly CompositionColorBrush highContrastBrush;
     private readonly ShapeVisual silhouetteMask;
     private readonly CompositionSpriteShape silhouetteMaskFill;
     private readonly CompositionVisualSurface silhouetteMaskSurface;
@@ -70,6 +72,7 @@ internal sealed partial class BackdropShapeLayer : IDisposable
 
         outlineGeometry = compositor.CreatePathGeometry();
         fallbackBrush = compositor.CreateColorBrush(DarkFallbackColor);
+        highContrastBrush = compositor.CreateColorBrush();
 
         silhouetteMask = compositor.CreateShapeVisual();
         silhouetteMaskFill = compositor.CreateSpriteShape(outlineGeometry);
@@ -108,7 +111,8 @@ internal sealed partial class BackdropShapeLayer : IDisposable
         openOpacityAnimation.InsertKeyFrame(0f, 0f);
         openOpacityAnimation.InsertKeyFrame(1f, 1f, openEasing);
 
-        uiSettings.AdvancedEffectsEnabledChanged += UISettings_AdvancedEffectsEnabledChanged;
+        uiSettings.AdvancedEffectsEnabledChanged += UISettings_MaterialChanged;
+        uiSettings.ColorValuesChanged += UISettings_MaterialChanged;
     }
 
     public void SetShape(BackdropShape shape, bool dark)
@@ -167,10 +171,20 @@ internal sealed partial class BackdropShapeLayer : IDisposable
 
     private void UpdateMaterial()
     {
+        if (accessibilitySettings.HighContrast)
+        {
+            highContrastBrush.Color = uiSettings.GetColorValue(UIColorType.Background);
+            plateBrush.Source = highContrastBrush;
+            return;
+        }
+
         plateBrush.Source = uiSettings.AdvancedEffectsEnabled && GetAcrylicBrush() is { } acrylic ? acrylic : fallbackBrush;
     }
 
-    private void UISettings_AdvancedEffectsEnabledChanged(UISettings sender, object args)
+    // AccessibilitySettings.HighContrastChanged needs a CoreWindow; ColorValuesChanged also fires on high contrast changes.
+    private void UISettings_MaterialChanged(UISettings sender, object args) => QueueMaterialUpdate();
+
+    private void QueueMaterialUpdate()
     {
         if (!dispatcherQueue.TryEnqueue(() =>
         {
@@ -223,7 +237,8 @@ internal sealed partial class BackdropShapeLayer : IDisposable
         }
 
         disposed = true;
-        uiSettings.AdvancedEffectsEnabledChanged -= UISettings_AdvancedEffectsEnabledChanged;
+        uiSettings.AdvancedEffectsEnabledChanged -= UISettings_MaterialChanged;
+        uiSettings.ColorValuesChanged -= UISettings_MaterialChanged;
         target.Root = null;
         root.StopAnimation("Scale");
         root.StopAnimation("Opacity");
@@ -245,6 +260,7 @@ internal sealed partial class BackdropShapeLayer : IDisposable
         silhouetteMaskFill.Dispose();
         silhouetteMask.Dispose();
         fallbackBrush.Dispose();
+        highContrastBrush.Dispose();
         outlineGeometry.Dispose();
         root.Dispose();
         openScaleAnimation.Dispose();
