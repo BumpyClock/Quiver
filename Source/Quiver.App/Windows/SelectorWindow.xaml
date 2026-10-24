@@ -14,23 +14,7 @@
         x:Name="DiscRoot"
         Background="Transparent"
         KeyboardAcceleratorPlacementMode="Hidden"
-        PointerMoved="DiscRoot_PointerMoved"
         PreviewKeyDown="DiscRoot_PreviewKeyDown">
-        <Grid.Resources>
-            <ResourceDictionary>
-                <ResourceDictionary.ThemeDictionaries>
-                    <ResourceDictionary x:Key="Light">
-                        <SolidColorBrush x:Key="SelectionFillBrush" Color="#80FFFFFF" />
-                    </ResourceDictionary>
-                    <ResourceDictionary x:Key="Dark">
-                        <SolidColorBrush x:Key="SelectionFillBrush" Color="#66000000" />
-                    </ResourceDictionary>
-                    <ResourceDictionary x:Key="HighContrast">
-                        <SolidColorBrush x:Key="SelectionFillBrush" Color="Transparent" />
-                    </ResourceDictionary>
-                </ResourceDictionary.ThemeDictionaries>
-            </ResourceDictionary>
-        </Grid.Resources>
         <Grid.KeyboardAccelerators>
             <KeyboardAccelerator Key="C" Invoked="CopyAccelerator_Invoked" />
             <KeyboardAccelerator
@@ -44,15 +28,24 @@
         <Grid
             x:Name="FlowerHost"
             HorizontalAlignment="Center"
-            VerticalAlignment="Top">
-            <Path
-                x:Name="SelectionOutline"
-                Fill="{ThemeResource SelectionFillBrush}"
-                IsHitTestVisible="False"
-                Stroke="{ThemeResource TextFillColorPrimaryBrush}"
-                StrokeLineJoin="Round"
-                StrokeThickness="2" />
-
+            VerticalAlignment="Top"
+            RequestedTheme="Dark">
+            <Grid.Resources>
+                <ResourceDictionary>
+                    <ResourceDictionary.ThemeDictionaries>
+                        <ResourceDictionary x:Key="Default">
+                            <SolidColorBrush x:Key="HubBackground" Color="#202020" />
+                            <SolidColorBrush x:Key="HubBackgroundPointerOver" Color="#2B2B2B" />
+                            <SolidColorBrush x:Key="HubBackgroundPressed" Color="#333333" />
+                        </ResourceDictionary>
+                        <ResourceDictionary x:Key="HighContrast">
+                            <SolidColorBrush x:Key="HubBackground" Color="{ThemeResource SystemColorWindowColor}" />
+                            <SolidColorBrush x:Key="HubBackgroundPointerOver" Color="{ThemeResource SystemColorHighlightColor}" />
+                            <SolidColorBrush x:Key="HubBackgroundPressed" Color="{ThemeResource SystemColorHighlightColor}" />
+                        </ResourceDictionary>
+                    </ResourceDictionary.ThemeDictionaries>
+                </ResourceDictionary>
+            </Grid.Resources>
             <ItemsRepeater
                 x:Name="BrowserRing"
                 HorizontalAlignment="Center"
@@ -70,17 +63,43 @@
                     </DataTemplate>
                 </ItemsRepeater.ItemTemplate>
             </ItemsRepeater>
+
+            <Button
+                x:Name="HubButton"
+                Width="48"
+                Height="48"
+                Padding="0"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                AutomationProperties.Name="Link options"
+                BorderThickness="0"
+                Click="HubButton_Click"
+                CornerRadius="24"
+                ToolTipService.ToolTip="Link options">
+                <Button.Resources>
+                    <ResourceDictionary>
+                        <StaticResource x:Key="ButtonBackground" ResourceKey="HubBackground" />
+                        <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="HubBackgroundPointerOver" />
+                        <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="HubBackgroundPressed" />
+                    </ResourceDictionary>
+                </Button.Resources>
+                <FontIcon
+                    FontSize="16"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Glyph="&#xE712;" />
+            </Button>
         </Grid>
 
         <Button
             x:Name="NamePill"
-            Padding="16,0"
+            Padding="16,8"
             HorizontalAlignment="Center"
             VerticalAlignment="Top"
             HorizontalContentAlignment="Stretch"
             AutomationProperties.Name="Link options"
             BorderThickness="0"
             CornerRadius="12"
+            RequestedTheme="Dark"
             ToolTipService.ToolTip="{x:Bind ViewModel.Url, Mode=OneWay}">
             <Button.Resources>
                 <ResourceDictionary>
@@ -135,34 +154,47 @@
                     </MenuFlyoutItem>
                 </MenuFlyout>
             </Button.Flyout>
-            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                <TextBlock
-                    x:Name="PillTitle"
-                    HorizontalAlignment="Center"
-                    MaxLines="1"
-                    Style="{StaticResource BodyStrongTextBlockStyle}"
-                    TextTrimming="CharacterEllipsis"
-                    TextWrapping="NoWrap" />
-                <StackPanel
-                    x:Name="PillLink"
-                    HorizontalAlignment="Center"
-                    Orientation="Horizontal"
-                    Spacing="4">
-                    <FontIcon
-                        x:Name="PillLock"
-                        VerticalAlignment="Center"
-                        FontSize="10"
-                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                        Glyph="&#xE72E;" />
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Spacing="2">
                     <TextBlock
-                        x:Name="PillHost"
-                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        x:Name="PillTitle"
                         MaxLines="1"
-                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Style="{StaticResource BodyStrongTextBlockStyle}"
                         TextTrimming="CharacterEllipsis"
                         TextWrapping="NoWrap" />
+                    <Grid x:Name="PillLink">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <FontIcon
+                            x:Name="PillLock"
+                            Margin="0,0,4,0"
+                            VerticalAlignment="Center"
+                            FontSize="10"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Glyph="&#xE72E;" />
+                        <TextBlock
+                            x:Name="PillHost"
+                            Grid.Column="1"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            MaxLines="1"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            TextTrimming="CharacterEllipsis"
+                            TextWrapping="NoWrap" />
+                    </Grid>
                 </StackPanel>
-            </StackPanel>
+                <FontIcon
+                    Grid.Column="1"
+                    VerticalAlignment="Center"
+                    FontSize="10"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Glyph="&#xE70D;" />
+            </Grid>
         </Button>
 
         <FlyoutBase.AttachedFlyout>

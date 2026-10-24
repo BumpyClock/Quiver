@@ -5,28 +5,31 @@ using Windows.Foundation;
 namespace Quiver.App.Controls;
 
 /// <summary>
-/// Geometry shared by the selector's XAML layout, window region, and acrylic shape. Petals overlap their
+/// Geometry shared by the selector's XAML layout, window region, and backdrop shape. Petals overlap their
 /// neighbors and a center disc fills the gap between them; the name pill sits below the flower.
 /// </summary>
 public readonly record struct RadialMetrics(int Count, double RingRadius, double OuterRadius)
 {
-    public const double ItemSize = 100;
+    public const double ItemSize = 104;
     public const double PetalRadius = ItemSize / 2;
-    public const double PillHeight = 48;
+    public const double PillHeight = 56;
     public const double PillCornerRadius = 12;
-    private const double MinPillWidth = 220;
+    public const double PillGap = 14;
+    private const double MinPillWidth = 264;
     private const double MaxPillWidth = 320;
-    private const double PillGap = 8;
-    private const double WindowMargin = 4;
-    private const double MinRingRadius = 1.2 * PetalRadius;
-    private const double HalfNeighborDistance = 0.85 * PetalRadius;
+    public const double ShadowMargin = 20;
+    private const double PairRingRadius = 58;
+    private const double PairCenterFillRadius = 27;
+    private const double MinRingRadius = 64;
+    private const double HalfNeighborDistance = 40;
+    private const double CenterFillInset = 20;
 
     public static RadialMetrics For(int count)
     {
         double ringRadius = count switch
         {
             <= 1 => 0,
-            2 => MinRingRadius,
+            2 => PairRingRadius,
             _ => Math.Max(MinRingRadius, HalfNeighborDistance / Math.Sin(Math.PI / count))
         };
 
@@ -35,26 +38,29 @@ public readonly record struct RadialMetrics(int Count, double RingRadius, double
 
     public double FlowerSize => 2 * OuterRadius;
 
-    public double CenterFillRadius => Count > 1 ? RingRadius - PetalRadius / 2 : 0;
+    public double FlowerHeight => Count == 2 ? ItemSize : FlowerSize;
+
+    public Point FlowerOrigin => new(OuterRadius, FlowerHeight / 2);
+
+    public double CenterFillRadius => Count switch
+    {
+        <= 1 => 0,
+        2 => PairCenterFillRadius,
+        _ => RingRadius - CenterFillInset
+    };
 
     public double PillWidth => Math.Clamp(FlowerSize, MinPillWidth, MaxPillWidth);
 
-    public double FlowerTop => WindowMargin;
+    public double FlowerTop => ShadowMargin;
 
-    public double PillTop => FlowerTop + FlowerSize + PillGap;
+    public double PillTop => FlowerTop + FlowerHeight + PillGap;
 
-    public double WindowWidth => Math.Max(FlowerSize, PillWidth) + 2 * WindowMargin;
+    public double WindowWidth => Math.Max(FlowerSize, PillWidth) + 2 * ShadowMargin;
 
-    public double WindowHeight => PillTop + PillHeight + WindowMargin;
+    public double WindowHeight => PillTop + PillHeight + ShadowMargin;
 
     /// <summary>The flower center in window coordinates; it opens under the cursor.</summary>
-    public Point FlowerCenter => new(WindowWidth / 2, FlowerTop + OuterRadius);
-
-    public bool IsInsideFlower(Point pointInFlower)
-    {
-        double dx = pointInFlower.X - OuterRadius, dy = pointInFlower.Y - OuterRadius;
-        return dx * dx + dy * dy <= OuterRadius * OuterRadius;
-    }
+    public Point FlowerCenter => new(WindowWidth / 2, FlowerTop + FlowerOrigin.Y);
 
     public Rect PillBounds => new((WindowWidth - PillWidth) / 2, PillTop, PillWidth, PillHeight);
 
@@ -86,7 +92,7 @@ public sealed partial class RadialLayout : NonVirtualizingLayout
             child.Measure(new Size(RadialMetrics.ItemSize, RadialMetrics.ItemSize));
         }
 
-        return new Size(metrics.FlowerSize, metrics.FlowerSize);
+        return new Size(metrics.FlowerSize, metrics.FlowerHeight);
     }
 
     protected override Size ArrangeOverride(NonVirtualizingLayoutContext context, Size finalSize)

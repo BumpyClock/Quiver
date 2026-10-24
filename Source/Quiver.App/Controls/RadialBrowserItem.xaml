@@ -5,91 +5,145 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    Width="100"
-    Height="100"
+    Width="104"
+    Height="104"
     mc:Ignorable="d">
 
     <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.ThemeDictionaries>
-                <ResourceDictionary x:Key="Light">
-                    <SolidColorBrush x:Key="ShortcutBadgeBackground" Color="#D9FFFFFF" />
-                </ResourceDictionary>
-                <ResourceDictionary x:Key="Dark">
-                    <SolidColorBrush x:Key="ShortcutBadgeBackground" Color="#CC2C2C2C" />
+                <ResourceDictionary x:Key="Default">
+                    <SolidColorBrush x:Key="PetalForeground" Color="#F7F8FA" />
+                    <SolidColorBrush x:Key="PetalSelectedFill" Color="#E5EDF7" />
+                    <SolidColorBrush x:Key="PetalSelectedForeground" Color="#182432" />
+                    <SolidColorBrush x:Key="PetalShortcutForeground" Color="#DCE3EB" />
+                    <SolidColorBrush x:Key="PetalShortcutSelectedForeground" Color="#24313F" />
+                    <SolidColorBrush x:Key="PetalShortcutFill" Color="#2E343B" />
+                    <SolidColorBrush x:Key="PetalShortcutSelectedFill" Color="#C9D5E3" />
+                    <SolidColorBrush x:Key="PetalPressedFill" Color="#1F182432" />
+                    <SolidColorBrush x:Key="PetalInk" Color="#202020" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="HighContrast">
-                    <SolidColorBrush x:Key="ShortcutBadgeBackground" Color="{ThemeResource SystemColorWindowColor}" />
+                    <SolidColorBrush x:Key="PetalForeground" Color="{ThemeResource SystemColorWindowTextColor}" />
+                    <SolidColorBrush x:Key="PetalSelectedFill" Color="{ThemeResource SystemColorHighlightColor}" />
+                    <SolidColorBrush x:Key="PetalSelectedForeground" Color="{ThemeResource SystemColorHighlightTextColor}" />
+                    <SolidColorBrush x:Key="PetalShortcutForeground" Color="{ThemeResource SystemColorWindowTextColor}" />
+                    <SolidColorBrush x:Key="PetalShortcutSelectedForeground" Color="{ThemeResource SystemColorHighlightTextColor}" />
+                    <SolidColorBrush x:Key="PetalShortcutFill" Color="{ThemeResource SystemColorWindowColor}" />
+                    <SolidColorBrush x:Key="PetalShortcutSelectedFill" Color="{ThemeResource SystemColorHighlightColor}" />
+                    <SolidColorBrush x:Key="PetalPressedFill" Color="{ThemeResource SystemColorHighlightColor}" />
+                    <SolidColorBrush x:Key="PetalInk" Color="{ThemeResource SystemColorWindowColor}" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
         </ResourceDictionary>
     </UserControl.Resources>
 
-    <Button
-        x:Name="LaunchButton"
-        Padding="0"
-        HorizontalAlignment="Stretch"
-        VerticalAlignment="Stretch"
-        AutomationProperties.Name="{x:Bind BrowserItem.Name, Mode=OneWay}"
-        BorderThickness="0"
-        Click="LaunchButton_Click"
-        CornerRadius="50"
-        GotFocus="LaunchButton_GotFocus"
-        PointerEntered="LaunchButton_PointerEntered"
-        ToolTipService.ToolTip="{x:Bind ToolTipText, Mode=OneWay}"
-        UseSystemFocusVisuals="False">
-        <Button.Resources>
-            <ResourceDictionary>
-                <StaticResource x:Key="ButtonBackground" ResourceKey="SubtleFillColorTransparentBrush" />
-                <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="SubtleFillColorTransparentBrush" />
-                <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="SubtleFillColorSecondaryBrush" />
-            </ResourceDictionary>
-        </Button.Resources>
-        <Grid Width="64" Height="64">
-            <Image x:Name="BrowserIcon" Source="{x:Bind BrowserItem.Icon, Mode=OneWay}" />
-            <Grid
-                Width="24"
-                Height="24"
-                Margin="0,0,-6,-6"
-                HorizontalAlignment="Right"
-                VerticalAlignment="Bottom"
-                Visibility="{x:Bind ProfileBadgeVisibility, Mode=OneWay}">
-                <Ellipse Fill="{ThemeResource AccentFillColorDefaultBrush}" />
-                <TextBlock
+    <Grid>
+        <VisualStateManager.VisualStateGroups>
+            <VisualStateGroup x:Name="SelectionStates">
+                <VisualState x:Name="Unselected" />
+                <VisualState x:Name="Selected">
+                    <VisualState.Setters>
+                        <Setter Target="SelectionDisc.Opacity" Value="1" />
+                        <Setter Target="PetalName.Foreground" Value="{ThemeResource PetalSelectedForeground}" />
+                        <Setter Target="ShortcutText.Foreground" Value="{ThemeResource PetalShortcutSelectedForeground}" />
+                        <Setter Target="ShortcutBadge.Background" Value="{ThemeResource PetalShortcutSelectedFill}" />
+                    </VisualState.Setters>
+                </VisualState>
+            </VisualStateGroup>
+        </VisualStateManager.VisualStateGroups>
+
+        <Ellipse
+            x:Name="SelectionDisc"
+            Fill="{ThemeResource PetalSelectedFill}"
+            IsHitTestVisible="False"
+            Opacity="0" />
+
+        <Button
+            x:Name="LaunchButton"
+            Padding="0"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch"
+            HorizontalContentAlignment="Stretch"
+            VerticalContentAlignment="Stretch"
+            AutomationProperties.Name="{x:Bind BrowserItem.Name, Mode=OneWay}"
+            BorderThickness="0"
+            Click="LaunchButton_Click"
+            CornerRadius="52"
+            ToolTipService.ToolTip="{x:Bind ToolTipText, Mode=OneWay}">
+            <Button.Resources>
+                <ResourceDictionary>
+                    <StaticResource x:Key="ButtonBackground" ResourceKey="SubtleFillColorTransparentBrush" />
+                    <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="SubtleFillColorTransparentBrush" />
+                    <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="PetalPressedFill" />
+                </ResourceDictionary>
+            </Button.Resources>
+            <Grid>
+                <StackPanel
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
-                    FontSize="11"
-                    FontWeight="SemiBold"
-                    Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"
-                    Text="{x:Bind BrowserItem.ProfileInitial, Mode=OneWay}" />
-                <Ellipse>
-                    <Ellipse.Fill>
-                        <ImageBrush ImageSource="{x:Bind BrowserItem.ProfileAvatar, Mode=OneWay}" Stretch="UniformToFill" />
-                    </Ellipse.Fill>
-                </Ellipse>
-                <Ellipse Stroke="{ThemeResource SolidBackgroundFillColorBaseBrush}" StrokeThickness="2" />
+                    Spacing="7">
+                    <Grid
+                        Width="44"
+                        Height="44"
+                        HorizontalAlignment="Center">
+                        <Image x:Name="BrowserIcon" Source="{x:Bind BrowserItem.Icon, Mode=OneWay}" />
+                        <Grid
+                            Width="17"
+                            Height="17"
+                            Margin="0,0,-5,-3"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Bottom"
+                            Visibility="{x:Bind ProfileBadgeVisibility, Mode=OneWay}">
+                            <Ellipse Fill="{ThemeResource AccentFillColorDefaultBrush}" />
+                            <TextBlock
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                FontSize="8"
+                                FontWeight="Bold"
+                                Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"
+                                Text="{x:Bind BrowserItem.ProfileInitial, Mode=OneWay}" />
+                            <Ellipse>
+                                <Ellipse.Fill>
+                                    <ImageBrush ImageSource="{x:Bind BrowserItem.ProfileAvatar, Mode=OneWay}" Stretch="UniformToFill" />
+                                </Ellipse.Fill>
+                            </Ellipse>
+                            <Ellipse Stroke="{ThemeResource PetalInk}" StrokeThickness="2" />
+                        </Grid>
+                    </Grid>
+                    <TextBlock
+                        x:Name="PetalName"
+                        MaxWidth="80"
+                        HorizontalAlignment="Center"
+                        FontSize="10"
+                        FontWeight="SemiBold"
+                        Foreground="{ThemeResource PetalForeground}"
+                        MaxLines="1"
+                        Text="{x:Bind BrowserItem.ShortName, Mode=OneWay}"
+                        TextTrimming="CharacterEllipsis"
+                        TextWrapping="NoWrap" />
+                </StackPanel>
+                <Border
+                    x:Name="ShortcutBadge"
+                    Width="20"
+                    Height="20"
+                    Margin="13,12,0,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Top"
+                    Background="{ThemeResource PetalShortcutFill}"
+                    CornerRadius="10"
+                    IsHitTestVisible="False"
+                    Visibility="{x:Bind ShortcutVisibility, Mode=OneWay}">
+                    <TextBlock
+                        x:Name="ShortcutText"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        FontSize="11"
+                        FontWeight="SemiBold"
+                        Foreground="{ThemeResource PetalShortcutForeground}"
+                        Text="{x:Bind ShortcutNumber, Mode=OneWay}" />
+                </Border>
             </Grid>
-            <Border
-                x:Name="ShortcutBadge"
-                MinWidth="24"
-                Height="22"
-                Padding="6,0"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center"
-                Background="{ThemeResource ShortcutBadgeBackground}"
-                BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
-                BorderThickness="1"
-                CornerRadius="11"
-                IsHitTestVisible="False"
-                Visibility="{x:Bind ShortcutVisibility, Mode=OneWay}">
-                <TextBlock
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center"
-                    FontSize="13"
-                    FontWeight="SemiBold"
-                    Foreground="{ThemeResource TextFillColorPrimaryBrush}"
-                    Text="{x:Bind ShortcutNumber, Mode=OneWay}" />
-            </Border>
-        </Grid>
-    </Button>
+        </Button>
+    </Grid>
 </UserControl>
