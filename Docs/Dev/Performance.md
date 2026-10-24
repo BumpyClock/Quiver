@@ -25,6 +25,18 @@ Release-note context for the next release:
 - Native messages larger than 1 MiB are rejected before allocating their body buffer.
 - Browser launches dispose their process wrappers after starting the child. Tile animations reuse their
   composition objects and respect the Windows animation preference.
+- Selector hover and keyboard focus use separate handlers. Delayed focus notifications cannot move
+  focus or replace a newer selection, preventing browser highlights from cycling without input.
+- The selector backdrop layer keeps its compositor geometry, brushes, shadow, and animation definitions
+  when the theme changes; only the shadow color and opacity change. Same-size warm opens reuse the last
+  successful native shape. The acrylic backdrop, its effect chain, and the pointer selection outline are
+  removed.
+- The selector uses the ink stamp design. Petals are 104 px on a dark acrylic plate in every Windows theme.
+  Each petal shows its profile or browser name and a numbered shortcut chip. The selected petal fills
+  light. A center button opens link options. The silhouette casts a soft drop shadow that is lighter in
+  the light Windows theme. The plate edge is antialiased instead of following the aliased window region.
+  Clicks within the shadow band no longer reach the window behind the selector. The plate falls back to
+  solid dark gray when Windows transparency effects are off or acrylic is unavailable.
 
 ## Additional changes
 
@@ -38,6 +50,14 @@ Release-note context for the next release:
   Editing or leaving a browser preview cancels its obsolete request.
 - Selector updates preserve collection identity and apply individual moves, replacements, additions, and
   removals. Opening and highlighting the selector reuse composition animations and easing functions.
+  `BackdropShapeLayer` retains desktop-compositor path geometry, the acrylic effect factory and brush, the
+  shared silhouette mask surface, easing, and animation definitions. `SetTheme` updates only the shadow
+  color and opacity. Temporary Win2D union intermediates and owned resources are disposed. Teardown is
+  idempotent.
+- The selector caches the last successful native shape by radial metrics and pixel window dimensions.
+  Same-size warm opens reuse that shape. Collection and native-size notifications coalesce into one
+  queued UI-dispatcher update. Unchanged metrics skip resize work. Selected item labels still refresh in
+  that update. Forced initial layout and two show-time `MoveAndResize` calls remain.
 - Rule editing uses a bounded virtualized list. Draft values survive row recycling and remain available
   when the ruleset is saved.
 - Activation and rule tests match immutable prepared rules on workers. Prepared regexes live with the
@@ -73,6 +93,7 @@ Run from the repository root:
 dotnet run --project Tests/RuleMatchSmoke/RuleMatchSmoke.csproj
 dotnet run --project Tests/SettingsSmoke/SettingsSmoke.csproj
 dotnet run --project Tests/UiSmoke/UiSmoke.csproj -p:Platform=x64 -p:PublishAot=false
+dotnet run --project Tests/SelectorSmoke/SelectorSmoke.csproj -p:Platform=x64 -p:PublishAot=false
 & "$env:USERPROFILE/.cargo/bin/cargo.exe" test --workspace
 dotnet build Source/Quiver.App/Quiver.App.csproj -c Release -r win-x64 -p:Platform=x64 -p:GenerateAppxPackageOnBuild=false
 dotnet publish Source/Quiver.App/Quiver.App.csproj -c Release -r win-x64 -p:Platform=x64 -p:GenerateAppxPackageOnBuild=false
@@ -95,6 +116,13 @@ recycled image reference release, and superseded editor preview cancellation. Ca
 the explicit maintenance drain.
 Container checks also cover cleared event data, reassignment, and scrolling an actual 1,000-row ListView
 in an offscreen test window. Drain checks cover active loads and canceled sole waiters.
+UiSmoke also covers repeated Windows.UI.Composition desktop acrylic shape, shadow theme, and animation
+updates, and double disposal.
+
+`Tests/SelectorSmoke` runs the production selector in an inactive, offscreen window with in-memory
+settings. It checks rapid keyboard and programmatic focus changes, stable browser labels, and delayed
+browser focus notifications after focus has moved to link options. It also checks the ink stamp ring radii
+for two, four, and six browsers, the center disc, and the link options width.
 
 `Tests/RuleMatchSmoke` accepts `--measure` for a local repeated-matching timing and allocation probe. This
 probe measures the matching API, not whole-application latency or memory use.

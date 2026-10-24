@@ -2,7 +2,6 @@ using Quiver.App.ViewModels;
 using Quiver.Library.Models;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Input;
 using System;
 using System.Linq;
 
@@ -42,7 +41,20 @@ public sealed partial class RadialBrowserItem : UserControl
             typeof(RadialBrowserItem),
             new PropertyMetadata(0, OnBrowserItemChanged));
 
-    public Visibility ShortcutVisibility => ShortcutNumber is >= 1 and <= 9 ? Visibility.Visible : Visibility.Collapsed;
+    public bool IsSelected
+    {
+        get => (bool)GetValue(IsSelectedProperty);
+        set => SetValue(IsSelectedProperty, value);
+    }
+
+    public static readonly DependencyProperty IsSelectedProperty =
+        DependencyProperty.Register(
+            nameof(IsSelected),
+            typeof(bool),
+            typeof(RadialBrowserItem),
+            new PropertyMetadata(false, OnIsSelectedChanged));
+
+    public Visibility ShortcutVisibility =>ShortcutNumber is >= 1 and <= 9 ? Visibility.Visible : Visibility.Collapsed;
 
     public Visibility ProfileBadgeVisibility => BrowserItem?.Profile is null ? Visibility.Collapsed : Visibility.Visible;
 
@@ -51,9 +63,6 @@ public sealed partial class RadialBrowserItem : UserControl
         : null;
 
     public event EventHandler<BrowserItemViewModel>? LaunchRequested;
-
-    /// <summary>Raised when the pointer enters the item or it receives focus.</summary>
-    public event EventHandler? SelectRequested;
 
     public event EventHandler<AlternateLaunchRequestedEventArgs>? AlternateLaunchRequested;
 
@@ -70,6 +79,14 @@ public sealed partial class RadialBrowserItem : UserControl
         }
     }
 
+    private static void OnIsSelectedChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs args)
+    {
+        if (dependencyObject is RadialBrowserItem item)
+        {
+            VisualStateManager.GoToState(item, item.IsSelected ? "Selected" : "Unselected", false);
+        }
+    }
+
     private void LaunchButton_Click(object sender, RoutedEventArgs e)
     {
         if (BrowserItem is not null)
@@ -77,10 +94,6 @@ public sealed partial class RadialBrowserItem : UserControl
             LaunchRequested?.Invoke(this, BrowserItem);
         }
     }
-
-    private void LaunchButton_PointerEntered(object sender, PointerRoutedEventArgs e) => SelectRequested?.Invoke(this, EventArgs.Empty);
-
-    private void LaunchButton_GotFocus(object sender, RoutedEventArgs e) => SelectRequested?.Invoke(this, EventArgs.Empty);
     #endregion
 
     #region Alternate launches

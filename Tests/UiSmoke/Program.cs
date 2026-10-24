@@ -53,8 +53,12 @@ internal sealed class SmokeApplication : Application
         var evictionSources = new List<string>();
         var loaders = new List<IconLoaderService>();
         Window? recyclingWindow = null;
+        Window? renderingWindow = null;
         try
         {
+            renderingWindow = new Window();
+            await RenderingChecks.CheckBackdropLayerAsync(renderingWindow);
+
             using (var image = new Bitmap(1024, 512))
             {
                 using var graphics = Graphics.FromImage(image);
@@ -351,6 +355,7 @@ internal sealed class SmokeApplication : Application
                 Directory.Delete(directory);
             }
             recyclingWindow?.Close();
+            renderingWindow?.Close();
             Exit();
         }
     }

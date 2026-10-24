@@ -18,6 +18,7 @@
     <PackageReference Include="Microsoft.WindowsAppSDK.Runtime" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" />
     <PackageReference Include="System.Drawing.Common" />
+    <PackageReference Include="Microsoft.Graphics.Win2D" />
     <Compile Include="../../Source/Quiver.App/Services/Interfaces/IIconLoader.cs" Link="IIconLoader.cs" />
     <Compile Include="../../Source/Quiver.App/Services/Interfaces/ISettingsService.cs" Link="ISettingsService.cs" />
     <Compile Include="../../Source/Quiver.App/Services/IconLoaderService.cs" Link="IconLoaderService.cs" />
@@ -29,5 +30,6 @@
     <Compile Include="../../Source/Quiver.App/ViewModels/Settings/EditBrowserPageViewModel.cs" Link="EditBrowserPageViewModel.cs" />
     <Compile Include="../../Source/Quiver.App/Views/BrowserContainerAssociation.cs" Link="BrowserContainerAssociation.cs" />
     <Compile Include="../../Source/Quiver.App/Helpers/UriLauncher.cs" Link="UriLauncher.cs" />
+    <Compile Include="../../Source/Quiver.App/Helpers/BackdropShapeLayer.cs" Link="BackdropShapeLayer.cs" />
   </ItemGroup>
 </Project>

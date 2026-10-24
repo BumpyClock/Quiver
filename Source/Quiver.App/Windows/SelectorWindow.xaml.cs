@@ -35,20 +35,21 @@ public sealed partial class SelectorWindow : Window
 {
     private static readonly TimeSpan OpenAnimationDuration = TimeSpan.FromMilliseconds(180);
     private static readonly UISettings AnimationSettings = new();
-    private const double OutlineInset = 3;
-    private const double OutlineTipRounding = 8;
 
     public SelectorPageViewModel ViewModel { get; }
     private readonly IQuickViewService quickViewService;
     private readonly ISettingsService settingsService;
     private readonly IntPtr hwnd;
 
-    private readonly AcrylicShapeLayer acrylicLayer;
+    private readonly BackdropShapeLayer backdropLayer;
 
     private bool isHiddenToTray = true;
+    private bool isClosed;
+    private bool metricsApplied;
+    private bool resizeQueued;
     private RadialMetrics metrics;
+    private (RadialMetrics Metrics, int Width, int Height)? appliedShape;
     private int selectedIndex;
-    private Point outlineTip;
     private Vector3KeyFrameAnimation? openScaleAnimation;
     private ScalarKeyFrameAnimation? openOpacityAnimation;
 
@@ -79,8 +80,9 @@ public sealed partial class SelectorWindow : Window
         ViewModel.Browsers.CollectionChanged += ViewModel_Browsers_CollectionChanged;
         SystemBackdrop = new TransparentTintBackdrop();
         RemoveWindowFrame();
-        acrylicLayer = new AcrylicShapeLayer(hwnd);
-        DiscRoot.ActualThemeChanged += (_, _) => UpdateShape();
+        backdropLayer = new BackdropShapeLayer(hwnd);
+        DiscRoot.ActualThemeChanged += DiscRoot_ActualThemeChanged;
+        AppWindow.Changed += AppWindow_Changed;
         settingsService.SettingsChanged += SettingsChanged;
         ApplyMetrics();
     }
@@ -125,12 +127,17 @@ public sealed partial class SelectorWindow : Window
         }
 
         settingsService.SettingsChanged -= SettingsChanged;
+        isClosed = true;
         ViewModel.CancelIconLoading();
         ViewModel.BrowserLaunched -= ViewModel_BrowserLaunched;
         ViewModel.PropertyChanged -= ViewModel_PropertyChanged;
         ViewModel.Browsers.CollectionChanged -= ViewModel_Browsers_CollectionChanged;
+        AppWindow.Changed -= AppWindow_Changed;
+        DiscRoot.ActualThemeChanged -= DiscRoot_ActualThemeChanged;
         Activated -= Window_Activated;
-        acrylicLayer.Dispose();
+        openScaleAnimation?.Dispose();
+        openOpacityAnimation?.Dispose();
+        backdropLayer.Dispose();
     }
     #endregion
 
@@ -148,7 +155,6 @@ public sealed partial class SelectorWindow : Window
         ViewModel.RefreshBrowsers();
         isHiddenToTray = false;
         ApplyMetrics();
-        outlineTip = new Point(metrics.OuterRadius, metrics.OuterRadius);
         Select(0);
         var bounds = CursorPosition.AnchoredAtCursor(metrics.WindowWidth, metrics.WindowHeight, metrics.FlowerCenter);
         AppWindow.MoveAndResize(bounds);
@@ -165,39 +171,63 @@ public sealed partial class SelectorWindow : Window
 
     private void ResizeAroundFlowerCenter()
     {
+        resizeQueued = false;
+        if (isClosed)
+        {
+            return;
+        }
+
         var previous = metrics;
-        ApplyMetrics();
+        bool changed = ApplyMetrics();
         if (isHiddenToTray)
         {
             return;
         }
 
-        var current = AppWindow.Position;
-        double scale = DiscRoot.XamlRoot?.RasterizationScale ?? 1.0;
-        AppWindow.MoveAndResize(new RectInt32(
-            current.X + (int)Math.Round((previous.FlowerCenter.X - metrics.FlowerCenter.X) * scale),
-            current.Y + (int)Math.Round((previous.FlowerCenter.Y - metrics.FlowerCenter.Y) * scale),
-            (int)Math.Round(metrics.WindowWidth * scale),
-            (int)Math.Round(metrics.WindowHeight * scale)));
+        if (changed)
+        {
+            var current = AppWindow.Position;
+            double scale = DiscRoot.XamlRoot?.RasterizationScale ?? 1.0;
+            AppWindow.MoveAndResize(new RectInt32(
+                current.X + (int)Math.Round((previous.FlowerCenter.X - metrics.FlowerCenter.X) * scale),
+                current.Y + (int)Math.Round((previous.FlowerCenter.Y - metrics.FlowerCenter.Y) * scale),
+                (int)Math.Round(metrics.WindowWidth * scale),
+                (int)Math.Round(metrics.WindowHeight * scale)));
+        }
         UpdateShape();
     }
 
-    private void ApplyMetrics()
+    private bool ApplyMetrics()
     {
-        metrics = RadialMetrics.For(ViewModel.Browsers.Count);
-        FlowerHost.Width = metrics.FlowerSize;
-        FlowerHost.Height = metrics.FlowerSize;
-        FlowerHost.Margin = new Thickness(0, metrics.FlowerTop, 0, 0);
-        NamePill.Width = metrics.PillWidth;
-        NamePill.Height = RadialMetrics.PillHeight;
-        NamePill.Margin = new Thickness(0, metrics.PillTop, 0, 0);
-        SelectionOutline.Visibility = metrics.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        var next = RadialMetrics.For(ViewModel.Browsers.Count);
+        bool changed = !metricsApplied || metrics != next;
+        metrics = next;
+        if (changed)
+        {
+            metricsApplied = true;
+            FlowerHost.Width = metrics.FlowerSize;
+            FlowerHost.Height = metrics.FlowerHeight;
+            FlowerHost.Margin = new Thickness(0, metrics.FlowerTop, 0, 0);
+            NamePill.Width = metrics.PillWidth;
+            NamePill.Height = RadialMetrics.PillHeight;
+            NamePill.Margin = new Thickness(0, metrics.PillTop, 0, 0);
+            HubButton.Visibility = metrics.CenterFillRadius > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
         Select(selectedIndex);
+        return changed;
     }
 
     private void UpdateShape()
     {
         var size = AppWindow.Size;
+        var shapeKey = (metrics, size.Width, size.Height);
+        bool isDark = DiscRoot.ActualTheme != ElementTheme.Light;
+        if (appliedShape == shapeKey)
+        {
+            backdropLayer.SetTheme(isDark);
+            return;
+        }
+
         float scale = (float)(size.Width / metrics.WindowWidth);
         var flowerCenter = new Vector2((float)metrics.FlowerCenter.X, (float)metrics.FlowerCenter.Y) * scale;
 
@@ -216,29 +246,84 @@ public sealed partial class SelectorWindow : Window
         var pill = metrics.PillBounds;
         var pillPx = new Rect(pill.X * scale, pill.Y * scale, pill.Width * scale, pill.Height * scale);
         float cornerPx = (float)RadialMetrics.PillCornerRadius * scale;
-        acrylicLayer.SetShape(new AcrylicShape(circles, pillPx, cornerPx), DiscRoot.ActualTheme != ElementTheme.Light);
+        backdropLayer.SetShape(new BackdropShape(circles, pillPx, cornerPx, new Vector2(size.Width, size.Height)), isDark);
 
+        // GDI regions are aliased, so the region extends past the antialiased edge to hold the drop shadow.
+        float shadowPx = (float)RadialMetrics.ShadowMargin * scale;
         IntPtr region = CreateRoundRectRgn(
-            (int)Math.Floor(pillPx.Left), (int)Math.Floor(pillPx.Top),
-            (int)Math.Ceiling(pillPx.Right) + 1, (int)Math.Ceiling(pillPx.Bottom) + 1,
-            (int)Math.Round(2 * cornerPx), (int)Math.Round(2 * cornerPx));
+            (int)Math.Floor(pillPx.Left - shadowPx), (int)Math.Floor(pillPx.Top - shadowPx),
+            (int)Math.Ceiling(pillPx.Right + shadowPx) + 1, (int)Math.Ceiling(pillPx.Bottom + shadowPx) + 1,
+            (int)Math.Round(2 * (cornerPx + shadowPx)), (int)Math.Round(2 * (cornerPx + shadowPx)));
         if (region == IntPtr.Zero)
         {
+            Debug.WriteLine("Could not create the selector window region.");
             return;
         }
 
-        foreach (var (circleCenter, radius) in circles)
+        try
         {
-            IntPtr circle = CreateEllipticRgn(
-                (int)MathF.Floor(circleCenter.X - radius), (int)MathF.Floor(circleCenter.Y - radius),
-                (int)MathF.Ceiling(circleCenter.X + radius) + 1, (int)MathF.Ceiling(circleCenter.Y + radius) + 1);
-            CombineRgn(region, region, circle, RgnOr);
-            DeleteObject(circle);
-        }
+            foreach (var (circleCenter, petalRadius) in circles)
+            {
+                float radius = petalRadius + shadowPx;
+                IntPtr circle = CreateEllipticRgn(
+                    (int)MathF.Floor(circleCenter.X - radius), (int)MathF.Floor(circleCenter.Y - radius),
+                    (int)MathF.Ceiling(circleCenter.X + radius) + 1, (int)MathF.Ceiling(circleCenter.Y + radius) + 1);
+                if (circle == IntPtr.Zero)
+                {
+                    Debug.WriteLine("Could not create a selector petal region.");
+                    return;
+                }
 
-        if (SetWindowRgn(hwnd, region, true) == 0)
+                try
+                {
+                    if (CombineRgn(region, region, circle, RgnOr) == 0)
+                    {
+                        Debug.WriteLine("Could not combine the selector window region.");
+                        return;
+                    }
+                }
+                finally
+                {
+                    DeleteObject(circle);
+                }
+            }
+
+            int inset = (int)Math.Ceiling(WinUiEdgeStripInset * scale);
+            IntPtr interior = CreateRectRgn(inset, inset, size.Width - inset, size.Height - inset);
+            if (interior == IntPtr.Zero)
+            {
+                Debug.WriteLine("Could not create the selector interior region.");
+                return;
+            }
+
+            try
+            {
+                if (CombineRgn(region, region, interior, RgnAnd) == 0)
+                {
+                    Debug.WriteLine("Could not clip the selector window region.");
+                    return;
+                }
+            }
+            finally
+            {
+                DeleteObject(interior);
+            }
+
+            if (SetWindowRgn(hwnd, region, true) == 0)
+            {
+                Debug.WriteLine("Could not apply the selector window region.");
+                return;
+            }
+
+            region = IntPtr.Zero;
+            appliedShape = shapeKey;
+        }
+        finally
         {
-            DeleteObject(region);
+            if (region != IntPtr.Zero)
+            {
+                DeleteObject(region);
+            }
         }
     }
 
@@ -259,14 +344,14 @@ public sealed partial class SelectorWindow : Window
 
         var size = AppWindow.Size;
         float scale = (float)(size.Width / metrics.WindowWidth);
-        acrylicLayer.PlayOpenAnimation(
+        backdropLayer.PlayOpenAnimation(
             new Vector2((float)metrics.FlowerCenter.X, (float)metrics.FlowerCenter.Y) * scale, OpenAnimationDuration);
 
         var flowerVisual = ElementCompositionPreview.GetElementVisual(FlowerHost);
         EnsureOpenAnimations(flowerVisual.Compositor);
         var scaleAnimation = openScaleAnimation!;
         var opacityAnimation = openOpacityAnimation!;
-        flowerVisual.CenterPoint = new Vector3((float)metrics.OuterRadius, (float)metrics.OuterRadius, 0);
+        flowerVisual.CenterPoint = new Vector3((float)metrics.FlowerOrigin.X, (float)metrics.FlowerOrigin.Y, 0);
         flowerVisual.StartAnimation("Scale", scaleAnimation);
         flowerVisual.StartAnimation("Opacity", opacityAnimation);
 
@@ -298,74 +383,18 @@ public sealed partial class SelectorWindow : Window
     #endregion
 
     #region Selection
-    private static Geometry CreateOutlineGeometry(Point center, Point tip)
-    {
-        double radius = RadialMetrics.PetalRadius - OutlineInset;
-        double dx = tip.X - center.X, dy = tip.Y - center.Y;
-        double distance = Math.Sqrt(dx * dx + dy * dy);
-        double tangentLength = Math.Sqrt(Math.Max(0, distance * distance - radius * radius));
-        if (tangentLength < OutlineTipRounding)
-        {
-            return new EllipseGeometry { Center = center, RadiusX = radius, RadiusY = radius };
-        }
-
-        double toTip = Math.Atan2(dy, dx);
-        double spread = Math.Acos(radius / distance);
-        Point OnCircle(double angle) => new(center.X + radius * Math.Cos(angle), center.Y + radius * Math.Sin(angle));
-        var first = OnCircle(toTip - spread);
-        var second = OnCircle(toTip + spread);
-
-        double rounding = Math.Min(OutlineTipRounding, tangentLength / 2);
-        Point NearTip(Point side) => new(
-            tip.X + (side.X - tip.X) / tangentLength * rounding,
-            tip.Y + (side.Y - tip.Y) / tangentLength * rounding);
-
-        var figure = new PathFigure { StartPoint = NearTip(second), IsClosed = true };
-        figure.Segments.Add(new LineSegment { Point = second });
-        figure.Segments.Add(new ArcSegment
-        {
-            Point = first,
-            Size = new Size(radius, radius),
-            IsLargeArc = true,
-            SweepDirection = SweepDirection.Clockwise,
-        });
-        figure.Segments.Add(new LineSegment { Point = NearTip(first) });
-        figure.Segments.Add(new QuadraticBezierSegment { Point1 = tip, Point2 = NearTip(second) });
-
-        var geometry = new PathGeometry();
-        geometry.Figures.Add(figure);
-        return geometry;
-    }
-
-    private void UpdateOutline()
-    {
-        if (metrics.Count == 0)
-        {
-            return;
-        }
-
-        var origin = new Point(metrics.OuterRadius, metrics.OuterRadius);
-        SelectionOutline.Data = CreateOutlineGeometry(metrics.ItemCenter(selectedIndex, origin), outlineTip);
-    }
-
     private void Select(int index)
     {
         int count = ViewModel.Browsers.Count;
         selectedIndex = count == 0 ? 0 : Math.Clamp(index, 0, count - 1);
-        UpdateOutline();
-        UpdatePill();
-    }
-
-    private void DiscRoot_PointerMoved(object sender, PointerRoutedEventArgs e)
-    {
-        var position = e.GetCurrentPoint(FlowerHost).Position;
-        if (!metrics.IsInsideFlower(position))
+        for (int i = 0; i < count; i++)
         {
-            return;
+            if (BrowserRing.TryGetElement(i) is RadialBrowserItem item)
+            {
+                item.IsSelected = i == selectedIndex;
+            }
         }
-
-        outlineTip = position;
-        UpdateOutline();
+        UpdatePill();
     }
 
     private void FocusSelection()
@@ -394,6 +423,8 @@ public sealed partial class SelectorWindow : Window
         PillLink.Visibility = string.IsNullOrEmpty(link) ? Visibility.Collapsed : Visibility.Visible;
     }
 
+    private void HubButton_Click(object sender, RoutedEventArgs e) => LinkMenu.ShowAt(HubButton);
+
     private void LinkMenu_Opening(object sender, object e)
     {
         QuickViewMenuItem.IsEnabled = quickViewService.IsQuickViewEnabled;
@@ -409,8 +440,11 @@ public sealed partial class SelectorWindow : Window
         }
 
         item.ShortcutNumber = args.Index + 1;
-        item.SelectRequested -= BrowserItem_SelectRequested;
-        item.SelectRequested += BrowserItem_SelectRequested;
+        item.IsSelected = args.Index == selectedIndex;
+        item.PointerEntered -=BrowserItem_PointerEntered;
+        item.PointerEntered += BrowserItem_PointerEntered;
+        item.GotFocus -= BrowserItem_GotFocus;
+        item.GotFocus += BrowserItem_GotFocus;
         item.LaunchRequested -= BrowserItem_LaunchRequested;
         item.LaunchRequested += BrowserItem_LaunchRequested;
         item.AlternateLaunchRequested -= BrowserItem_AlternateLaunchRequested;
@@ -422,10 +456,20 @@ public sealed partial class SelectorWindow : Window
         if (args.Element is RadialBrowserItem item)
         {
             item.ShortcutNumber = args.NewIndex + 1;
+            item.IsSelected = args.NewIndex == selectedIndex;
         }
     }
 
-    private void BrowserItem_SelectRequested(object? sender, EventArgs e)
+    private void BrowserItem_GotFocus(object sender, RoutedEventArgs e)
+    {
+        int focused = GetFocusedItemIndex();
+        if (focused >= 0 && sender is RadialBrowserItem item && BrowserRing.GetElementIndex(item) == focused)
+        {
+            Select(focused);
+        }
+    }
+
+    private void BrowserItem_PointerEntered(object sender, PointerRoutedEventArgs e)
     {
         if (sender is not RadialBrowserItem item || BrowserRing.GetElementIndex(item) is not (>= 0 and var index))
         {
@@ -464,7 +508,34 @@ public sealed partial class SelectorWindow : Window
         }
     }
 
-    private void ViewModel_Browsers_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e) => ResizeAroundFlowerCenter();
+    private void ViewModel_Browsers_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        => QueueGeometryUpdate();
+
+    private void AppWindow_Changed(AppWindow sender, AppWindowChangedEventArgs args)
+    {
+        if (args.DidSizeChange)
+        {
+            QueueGeometryUpdate();
+        }
+    }
+
+    private void DiscRoot_ActualThemeChanged(FrameworkElement sender, object args)
+        => backdropLayer.SetTheme(DiscRoot.ActualTheme != ElementTheme.Light);
+
+    private void QueueGeometryUpdate()
+    {
+        if (isClosed || resizeQueued)
+        {
+            return;
+        }
+
+        resizeQueued = true;
+        if (!DispatcherQueue.TryEnqueue(ResizeAroundFlowerCenter))
+        {
+            resizeQueued = false;
+            Debug.WriteLine("Could not enqueue the selector geometry update.");
+        }
+    }
 
     private void SettingsChanged(object? sender, SettingsChangedEventArgs e)
     {
@@ -667,7 +738,9 @@ public sealed partial class SelectorWindow : Window
         Clipboard.Flush();
     }
 
+    private const int RgnAnd = 1;
     private const int RgnOr = 2;
+    private const double WinUiEdgeStripInset = 4;
     private static readonly IntPtr HwndTopmost = new(-1);
     private const uint SwpNoSize = 0x0001;
     private const uint SwpNoMove = 0x0002;
@@ -689,6 +762,9 @@ public sealed partial class SelectorWindow : Window
 
     [LibraryImport("gdi32.dll")]
     private static partial int CombineRgn(IntPtr destination, IntPtr source1, IntPtr source2, int mode);
+
+    [LibraryImport("gdi32.dll")]
+    private static partial IntPtr CreateRectRgn(int left, int top, int right, int bottom);
 
     [LibraryImport("gdi32.dll")]
     private static partial IntPtr CreateEllipticRgn(int left, int top, int right, int bottom);
