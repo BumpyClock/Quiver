@@ -18,7 +18,7 @@ jobs:
         with:
           ref: main
       - name: rustup toolchain install
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
         with:
           targets: x86_64-pc-windows-msvc,aarch64-pc-windows-msvc
       - name: Setup .NET
