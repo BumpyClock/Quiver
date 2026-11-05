@@ -3,7 +3,6 @@ using Quiver.App.Services.Interfaces;
 using Quiver.Library.Models;
 using Microsoft.UI.Xaml.Media.Imaging;
 using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
@@ -196,16 +195,13 @@ public partial class BrowserIconDialogViewModel : ObservableObject
         IsLoadingExeIcons = true;
         try
         {
-            var page = new List<BrowserIconChoice>(ExeIconBatchSize);
             int end = Math.Min(pageStart + ExeIconBatchSize, executableIconCount);
-            for (int index = pageStart; index < end && !isClosed; index++)
-            {
-                var choice = index == originalIconIndex && originalExeChoice is not null
-                    ? originalExeChoice
-                    : await CreateExecutableChoiceAsync(index);
-                if (isClosed) return;
-                if (choice is not null) page.Add(choice);
-            }
+            var choices = await Task.WhenAll(Enumerable.Range(pageStart, end - pageStart).Select(index =>
+                index == originalIconIndex && originalExeChoice is not null
+                    ? Task.FromResult<BrowserIconChoice?>(originalExeChoice)
+                    : CreateExecutableChoiceAsync(index)));
+            if (isClosed) return;
+            var page = choices.OfType<BrowserIconChoice>().ToList();
 
             changingExecutablePage = true;
             try
