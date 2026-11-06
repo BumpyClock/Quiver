@@ -155,10 +155,15 @@ public partial class SelectorPageViewModel : ObservableObject
                     try
                     {
                         cancellation.Token.ThrowIfCancellationRequested();
-                        var icon = item.Icon ?? await _iconLoader.LoadIconAsync(item.Model, cancellation.Token);
-                        var avatar = NeedsAvatar(item)
-                            ? await LoadAvatarAsync(item.Profile!.AvatarPath!, cancellation.Token)
-                            : item.ProfileAvatar;
+                        var iconTask = item.Icon is null
+                            ? _iconLoader.LoadIconAsync(item.Model, cancellation.Token)
+                            : Task.FromResult<BitmapImage?>(item.Icon);
+                        var avatarTask = NeedsAvatar(item)
+                            ? LoadAvatarAsync(item.Profile!.AvatarPath!, cancellation.Token)
+                            : Task.FromResult(item.ProfileAvatar);
+                        await Task.WhenAll(iconTask, avatarTask);
+                        var icon = iconTask.Result;
+                        var avatar = avatarTask.Result;
                         if (!cancellation.IsCancellationRequested)
                         {
                             item.Icon = icon;
