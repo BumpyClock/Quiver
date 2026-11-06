@@ -73,14 +73,17 @@ public abstract record CliArgs
         }
     }
 
-    private static OpenUrl ToOpenUrl(string value)
+    // An empty url (a bare "quiver://" or "") is no url, so it cannot reach rule matching.
+    private static CliArgs ToOpenUrl(string value)
     {
-        if (value.StartsWith(ProtocolPrefix, StringComparison.OrdinalIgnoreCase))
+        bool isProtocol = value.StartsWith(ProtocolPrefix, StringComparison.OrdinalIgnoreCase);
+        string url = isProtocol ? value[ProtocolPrefix.Length..] : value;
+        if (string.IsNullOrWhiteSpace(url))
         {
-            return new OpenUrl(value[ProtocolPrefix.Length..]);
+            return new Empty();
         }
 
-        return new OpenUrl(value.Contains(' ') ? $"\"{value}\"" : value);
+        return new OpenUrl(!isProtocol && url.Contains(' ') ? $"\"{url}\"" : url);
     }
 
     public static CliArgs GatherInfo(AppActivationArguments activationArgs, bool isSecondInstance)

@@ -37,6 +37,10 @@ internal static class CliArgsChecks
             ("--page", new Empty()),
             ("--minimized --page", new Minimized()),
             ("--settings --page", new OpenSettings(SettingsTab.Browsers)),
+            ("quiver://", new Empty()),
+            ("--uri quiver://", new Empty()),
+            ("\"\"", new Empty()),
+            ("\"QUIVER:// \"", new Empty()),
         ];
 
         foreach (var (commandLine, expected) in cases)
