@@ -71,8 +71,8 @@
                     Grid.Column="2"
                     Width="20"
                     Height="20"
-                    IsActive="False"
-                    Visibility="Collapsed" />
+                    IsActive="True"
+                    Visibility="Visible" />
 
                 <DropDownButton
                     x:Name="OpenInButton"
@@ -92,5 +92,39 @@
             x:Name="WebViewHost"
             Grid.Row="1"
             Padding="8,0,8,8" />
+
+        <StackPanel
+            x:Name="StartupErrorPanel"
+            Grid.Row="1"
+            MaxWidth="480"
+            Padding="24"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Spacing="8"
+            Visibility="Collapsed">
+            <FontIcon
+                HorizontalAlignment="Center"
+                FontSize="32"
+                Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                Glyph="&#xE783;" />
+            <TextBlock
+                HorizontalAlignment="Center"
+                Style="{StaticResource SubtitleTextBlockStyle}"
+                Text="Quick View couldn't start" />
+            <TextBlock
+                HorizontalAlignment="Center"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Text="Use Open In to view this page in a browser."
+                TextAlignment="Center"
+                TextWrapping="Wrap" />
+            <TextBlock
+                x:Name="StartupErrorDetailsText"
+                HorizontalAlignment="Center"
+                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                IsTextSelectionEnabled="True"
+                Style="{StaticResource CaptionTextBlockStyle}"
+                TextAlignment="Center"
+                TextWrapping="Wrap" />
+        </StackPanel>
     </Grid>
 </Window>

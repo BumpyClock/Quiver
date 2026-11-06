@@ -22,6 +22,8 @@
     <Compile Include="../../Source/Quiver.App/Services/Interfaces/IIconLoader.cs" Link="IIconLoader.cs" />
     <Compile Include="../../Source/Quiver.App/Services/Interfaces/ISettingsService.cs" Link="ISettingsService.cs" />
     <Compile Include="../../Source/Quiver.App/Services/IconLoaderService.cs" Link="IconLoaderService.cs" />
+    <Compile Include="../../Source/Quiver.App/Services/Interfaces/IWebViewEnvironmentService.cs" Link="IWebViewEnvironmentService.cs" />
+    <Compile Include="../../Source/Quiver.App/Services/WebViewEnvironmentService.cs" Link="WebViewEnvironmentService.cs" />
     <Compile Include="../../Source/Quiver.App/ViewModels/Settings/BrowserIconDialogViewModel.cs" Link="BrowserIconDialogViewModel.cs" />
     <Compile Include="../../Source/Quiver.App/ViewModels/BrowserItemViewModel.cs" Link="BrowserItemViewModel.cs" />
     <Compile Include="../../Source/Quiver.App/ViewModels/SelectorPageViewModel.cs" Link="SelectorPageViewModel.cs" />

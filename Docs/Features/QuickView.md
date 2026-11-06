@@ -37,5 +37,10 @@ Configure it in **Quiver Settings > Quick View**, or add the following top-level
   Restart Quiver after changing them if you have already opened a Quick View window.
 - `TrackingPrevention` supports `None`, `Basic`, `Balanced` (default), or `Strict` for the WebView2 profile.
 
+A Quick View window shows a progress ring while WebView2 starts. If WebView2 cannot start, for example because
+the WebView2 Runtime is missing, the window shows the error in place of the page. **Open In** still opens the
+address shown in the toolbar in a browser. The next Quick View window tries to start WebView2 again, so you do not
+need to restart Quiver after fixing the cause.
+
 Closing a Quick View window closes its WebView2 control and stops pending navigation for that window.
 The shared WebView2 environment remains available for other Quick View windows.
