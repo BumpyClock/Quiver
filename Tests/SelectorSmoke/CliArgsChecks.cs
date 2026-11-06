@@ -33,6 +33,14 @@ internal static class CliArgsChecks
             ($"\"{exe.ToUpperInvariant()}\" https://a.example", new OpenUrl("https://a.example")),
             ($"\"{exe}\"", new Empty()),
             ("--unknown https://a.example", new OpenUrl("--unknown")),
+            ("--uri", new Empty()),
+            ("--page", new Empty()),
+            ("--minimized --page", new Minimized()),
+            ("--settings --page", new OpenSettings(SettingsTab.Browsers)),
+            ("quiver://", new Empty()),
+            ("--uri quiver://", new Empty()),
+            ("\"\"", new Empty()),
+            ("\"QUIVER:// \"", new Empty()),
         ];
 
         foreach (var (commandLine, expected) in cases)

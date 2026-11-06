@@ -36,14 +36,14 @@ public abstract record CliArgs
     private static CliArgs Parse(ParseResult parseResult)
     {
         bool minimized = parseResult.GetValue(MinimizedOption);
-        string? page = parseResult.GetValue(PageOption);
+        string? page = ValueOrNull(parseResult, PageOption);
         if (parseResult.GetValue(SettingsOption) || page is not null)
         {
             return new OpenSettings(SettingsTabs.Parse(page ?? string.Empty));
         }
 
         string[] values = parseResult.GetValue(ValuesArgument) ?? [];
-        string? uriValue = parseResult.GetValue(UriOption);
+        string? uriValue = ValueOrNull(parseResult, UriOption);
 
         if (minimized)
         {
@@ -60,14 +60,30 @@ public abstract record CliArgs
         return values.Length > first ? ToOpenUrl(values[first]) : new Empty();
     }
 
-    private static OpenUrl ToOpenUrl(string value)
+    // An option given without its value (for example a bare "--uri") is a parse error, and GetValue throws on it.
+    private static string? ValueOrNull(ParseResult parseResult, Option<string?> option)
     {
-        if (value.StartsWith(ProtocolPrefix, StringComparison.OrdinalIgnoreCase))
+        try
         {
-            return new OpenUrl(value[ProtocolPrefix.Length..]);
+            return parseResult.GetValue(option);
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    // An empty url (a bare "quiver://" or "") is no url, so it cannot reach rule matching.
+    private static CliArgs ToOpenUrl(string value)
+    {
+        bool isProtocol = value.StartsWith(ProtocolPrefix, StringComparison.OrdinalIgnoreCase);
+        string url = isProtocol ? value[ProtocolPrefix.Length..] : value;
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return new Empty();
         }
 
-        return new OpenUrl(value.Contains(' ') ? $"\"{value}\"" : value);
+        return new OpenUrl(!isProtocol && url.Contains(' ') ? $"\"{url}\"" : url);
     }
 
     public static CliArgs GatherInfo(AppActivationArguments activationArgs, bool isSecondInstance)

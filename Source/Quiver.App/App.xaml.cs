@@ -182,9 +182,9 @@ public partial class App : Microsoft.UI.Xaml.Application
 
         var settingsService = services.GetRequiredService<ISettingsService>();
         var settings = settingsService.LoadSettings();
-        if (settings.AppSettings.RuleMatching)
+        // Only a real URL is matched; a bare or minimized start must not trigger a catch-all rule.
+        if (cliArgs is CliArgs.OpenUrl { Url: var url } && settings.AppSettings.RuleMatching)
         {
-            string url = (cliArgs as CliArgs.OpenUrl)?.Url ?? string.Empty;
             var snapshot = settingsService.PreparedRulesets;
             using var cancellation = new CancellationTokenSource();
             state = new AppState.Matching(cliArgs, cancellation);
