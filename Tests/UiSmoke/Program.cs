@@ -147,7 +147,7 @@ internal sealed class SmokeApplication : Application
 
             var chooser = new BrowserIconDialogViewModel(new FakeIconLoader(first), "fixture.exe",
                 new BrowserIcon { Source = BrowserIconSource.Executable, Index = 20 });
-            await chooser.SelectSourceAsync(BrowserIconSource.Executable);
+            await chooser.OpenAsync();
             Check(chooser.ExeIcons.Count <= 16 && chooser.Selection?.Icon.Index == 20,
                 "first chooser page bounded and original icon selected");
             await chooser.LoadMoreExecutableIconsAsync();
@@ -163,6 +163,7 @@ internal sealed class SmokeApplication : Application
             Check(chooser.Selection?.Icon.Index == 2,
                 "user-selected icon survives page change");
             chooser.Close();
+            await IconDialogChecks.RunAsync(first);
 
             Directory.CreateDirectory(evictionDirectory);
             string staleRegular = Path.Combine(evictionDirectory, new string('A', 64) + ".img");

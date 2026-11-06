@@ -14,7 +14,6 @@ namespace Quiver.App.Views.Dialogs;
 
 public sealed partial class BrowserIconDialog : ContentDialog
 {
-    private bool isOpened;
     public BrowserIconDialogViewModel ViewModel { get; }
 
     public BrowserIconDialog(IIconLoader iconLoader, string exePath, BrowserIcon? icon)
@@ -27,21 +26,14 @@ public sealed partial class BrowserIconDialog : ContentDialog
             item.Tag is BrowserIconSource source && source == ViewModel.SelectedSource);
     }
 
-    private async void Dialog_Opened(ContentDialog sender, ContentDialogOpenedEventArgs args)
-    {
-        isOpened = true;
-        await ViewModel.SelectSourceAsync(ViewModel.SelectedSource);
-    }
+    private async void Dialog_Opened(ContentDialog sender, ContentDialogOpenedEventArgs args) =>
+        await ViewModel.OpenAsync();
 
-    private void Dialog_Closed(ContentDialog sender, ContentDialogClosedEventArgs args)
-    {
-        isOpened = false;
-        ViewModel.Close();
-    }
+    private void Dialog_Closed(ContentDialog sender, ContentDialogClosedEventArgs args) => ViewModel.Close();
 
     private async void SourceSelector_SelectionChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs args)
     {
-        if (isOpened && sender.SelectedItem?.Tag is BrowserIconSource source)
+        if (sender.SelectedItem?.Tag is BrowserIconSource source)
             await ViewModel.SelectSourceAsync(source);
     }
 
@@ -66,12 +58,12 @@ public sealed partial class BrowserIconDialog : ContentDialog
             var hwnd = Win32Interop.GetWindowFromWindowId(XamlRoot.ContentIslandEnvironment.AppWindowId);
             WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
             var file = await picker.PickSingleFileAsync();
-            if (file is not null && isOpened)
+            if (file is not null)
                 await ViewModel.LoadLocalImageAsync(file.Path);
         }
         catch (Exception)
         {
-            if (isOpened) ViewModel.ErrorMessage = "Couldn't open the file picker. Please try again.";
+            if (ViewModel.IsOpen) ViewModel.ErrorMessage = "Couldn't open the file picker. Please try again.";
         }
     }
 
