@@ -15,9 +15,8 @@ internal class BrowsersPageViewModel
     private const int MaxConcurrentIconLoads = 4;
     private readonly ISettingsService settingsService;
     private readonly IIconLoader iconLoader;
-    private readonly HashSet<BrowserItemViewModel> realizedItems = [];
-    private readonly HashSet<BrowserItemViewModel> attemptedItems = [];
-    private readonly Dictionary<BrowserItemViewModel, IconLoadRequest> activeIconLoads = [];
+    // Presence means realized. Done covers loaded and failed alike, so a failed item is not retried until unrealized.
+    private readonly Dictionary<BrowserItemViewModel, IconLoadState> iconStates = [];
     private bool isPumpingIconLoads;
 
     public ObservableCollection<BrowserItemViewModel> Browsers { get; }
@@ -39,28 +38,19 @@ internal class BrowsersPageViewModel
                 return;
             }
 
-            realizedItems.Add(item);
+            iconStates.TryAdd(item, new IconLoadState.Pending());
             StartPendingIconLoads();
             return;
         }
 
-        realizedItems.Remove(item);
-        attemptedItems.Remove(item);
-        CancelIconLoad(item);
-        item.Icon = null;
+        Unrealize(item);
     }
 
     public void CancelIconLoading()
     {
-        foreach (BrowserItemViewModel item in realizedItems)
+        foreach (BrowserItemViewModel item in iconStates.Keys.ToArray())
         {
-            item.Icon = null;
-        }
-        realizedItems.Clear();
-        attemptedItems.Clear();
-        foreach (IconLoadRequest request in activeIconLoads.Values.ToArray())
-        {
-            Cancel(request);
+            Unrealize(item);
         }
     }
 
@@ -98,17 +88,17 @@ internal class BrowsersPageViewModel
         isPumpingIconLoads = true;
         try
         {
-            while (activeIconLoads.Count < MaxConcurrentIconLoads)
+            while (iconStates.Values.Count(state => state is IconLoadState.Loading) < MaxConcurrentIconLoads)
             {
-                BrowserItemViewModel? item = FindPendingIconLoad();
+                BrowserItemViewModel? item = iconStates
+                    .FirstOrDefault(entry => entry.Value is IconLoadState.Pending).Key;
                 if (item is null)
                 {
                     return;
                 }
 
-                attemptedItems.Add(item);
                 var request = new IconLoadRequest(new CancellationTokenSource());
-                activeIconLoads.Add(item, request);
+                iconStates[item] = new IconLoadState.Loading(request);
                 _ = LoadIconAsync(item, request);
             }
         }
@@ -118,27 +108,12 @@ internal class BrowsersPageViewModel
         }
     }
 
-    private BrowserItemViewModel? FindPendingIconLoad()
-    {
-        foreach (BrowserItemViewModel item in realizedItems)
-        {
-            if (item.Icon is null && !activeIconLoads.ContainsKey(item) && !attemptedItems.Contains(item))
-            {
-                return item;
-            }
-        }
-
-        return null;
-    }
-
     private async Task LoadIconAsync(BrowserItemViewModel item, IconLoadRequest request)
     {
         try
         {
             var icon = await iconLoader.LoadIconAsync(item.Model, request.Cancellation.Token);
-            if (!request.Cancellation.IsCancellationRequested && realizedItems.Contains(item)
-                && activeIconLoads.TryGetValue(item, out var activeRequest)
-                && ReferenceEquals(activeRequest, request))
+            if (!request.Cancellation.IsCancellationRequested && IsCurrent(item, request))
             {
                 item.Icon = icon;
             }
@@ -152,22 +127,27 @@ internal class BrowsersPageViewModel
         }
         finally
         {
-            if (activeIconLoads.TryGetValue(item, out var activeRequest)
-                && ReferenceEquals(activeRequest, request))
+            if (IsCurrent(item, request))
             {
-                activeIconLoads.Remove(item);
+                iconStates[item] = new IconLoadState.Done();
             }
             request.Cancellation.Dispose();
             StartPendingIconLoads();
         }
     }
 
-    private void CancelIconLoad(BrowserItemViewModel item)
+    private bool IsCurrent(BrowserItemViewModel item, IconLoadRequest request)
+        => iconStates.TryGetValue(item, out var state)
+            && state is IconLoadState.Loading loading
+            && ReferenceEquals(loading.Request, request);
+
+    private void Unrealize(BrowserItemViewModel item)
     {
-        if (activeIconLoads.TryGetValue(item, out var request))
+        if (iconStates.Remove(item, out var state) && state is IconLoadState.Loading loading)
         {
-            Cancel(request);
+            Cancel(loading.Request);
         }
+        item.Icon = null;
     }
 
     private static void Cancel(IconLoadRequest request)
@@ -183,14 +163,11 @@ internal class BrowsersPageViewModel
 
     private void Browsers_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        foreach (BrowserItemViewModel item in realizedItems.ToArray())
+        foreach (BrowserItemViewModel item in iconStates.Keys.ToArray())
         {
             if (!Browsers.Contains(item))
             {
-                realizedItems.Remove(item);
-                attemptedItems.Remove(item);
-                CancelIconLoad(item);
-                item.Icon = null;
+                Unrealize(item);
             }
         }
     }
@@ -198,6 +175,13 @@ internal class BrowsersPageViewModel
     private void SaveBrowsers() => settingsService.UpdateBrowsers(new(Browsers.Select(item => item.Model)));
 
     private sealed record IconLoadRequest(CancellationTokenSource Cancellation);
+
+    private abstract record IconLoadState
+    {
+        public sealed record Pending : IconLoadState;
+        public sealed record Loading(IconLoadRequest Request) : IconLoadState;
+        public sealed record Done : IconLoadState;
+    }
 }
 
 internal enum BrowserRefreshMode

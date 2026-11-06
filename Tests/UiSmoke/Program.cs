@@ -284,6 +284,8 @@ internal sealed class SmokeApplication : Application
             await preview.IconPreviewLoadTask.WaitAsync(TimeSpan.FromSeconds(2));
             Check(previewIcons.Canceled == 2, "leaving editor cancels current preview");
 
+            await IconConsumerChecks.RunAsync();
+
             var firstRule = new Ruleset { RulesetName = "First" };
             var secondRule = new Ruleset { RulesetName = "Second" };
             var rulesSettings = new InMemorySettingsService(new Settings { Rulesets = [firstRule, secondRule] });
