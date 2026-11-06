@@ -21,7 +21,7 @@ foreach ($platform in $Platforms) {
   $rustTarget = $RustTargets[$platform]
   Write-Output "Building NativeMessagingHost ($rustTarget)...."
   Invoke-Native { rustup target add $rustTarget }
-  Invoke-Native { cargo build --release --workspace --target $rustTarget }
+  Invoke-Native { cargo build --release --workspace --locked --target $rustTarget }
 
   Write-Output "Building Quiver MSIX ($platform)...."
   Invoke-Native {
