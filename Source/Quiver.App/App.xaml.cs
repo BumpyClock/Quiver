@@ -247,15 +247,18 @@ public partial class App : Microsoft.UI.Xaml.Application
             return;
         }
 
+        // A link still being rule-matched is deferred, so an aborted exit opens it instead of losing it.
+        CliArgs? matching = (state as AppState.Matching)?.Activation;
         CancelActivation();
-        state = new AppState.Exiting(Deferred: null);
+        state = new AppState.Exiting(Deferred: matching);
         bool flushed = await FlushPendingWorkAsync();
         if (state is not AppState.Exiting exiting)
         {
             return;
         }
 
-        if (!flushed)
+        // A fatal error raised while the save-failure dialog was open still exits.
+        if (!flushed && !fatalExit)
         {
             state = new AppState.Idle();
             if (exiting.Deferred is { } deferred)
@@ -267,7 +270,7 @@ public partial class App : Microsoft.UI.Xaml.Application
 
         state = new AppState.ShuttingDown();
         trayService?.Dispose();
-        if (restart)
+        if (restart && !fatalExit)
         {
             var reason = AppInstance.Restart(string.Empty);
             Debug.WriteLine($"Restart failed: {reason}");
