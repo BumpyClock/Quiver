@@ -20,6 +20,8 @@ public class JsonFileService : ISettingsService
     // pendingJson without saveTask means the last write failed; the next save or flush restarts the writer.
     private byte[]? pendingJson;
     private Task? saveTask;
+    // Smoke tests hold a write here, after the snapshot, to queue an edit while it is in flight.
+    internal Func<Task>? WriteStartedForTest;
 
     public PreparedRulesets PreparedRulesets => preparedRulesets ??= RuleMatch.PrepareRulesets(LoadSettings().Rulesets);
 
@@ -110,6 +112,7 @@ public class JsonFileService : ISettingsService
                         return;
                     }
                 }
+                if (WriteStartedForTest is { } writeStarted) await writeStarted().ConfigureAwait(false);
                 string temporaryPath = settingsPath + ".tmp";
                 await File.WriteAllBytesAsync(temporaryPath, json).ConfigureAwait(false);
                 File.Move(temporaryPath, settingsPath, overwrite: true);

@@ -113,17 +113,28 @@ try
 {
     File.WriteAllText(queueBlocked, "directory blocked by file");
     queueService.UpdateQuickView(new QuickViewSettings { AdditionalBrowserArguments = "--first" });
-    await Task.Delay(200);
+    // WhenAny waits without observing the exception, so only the service's own continuation can observe it.
+    Task? failedWrite = queueService.FlushAsync();
+    await Task.WhenAny(failedWrite);
+    Check(failedWrite.IsFaulted, "background write fails while storage is blocked");
+    failedWrite = null;
     File.Delete(queueBlocked);
     queueService.UpdateQuickView(new QuickViewSettings { AdditionalBrowserArguments = "--second" });
     await queueService.FlushAsync();
     Check(new JsonFileService(queuePath).LoadSettings().QuickView.AdditionalBrowserArguments == "--second",
         "save after a failed background write restarts the writer");
 
+    var writeStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    var releaseWrite = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    queueService.WriteStartedForTest = () => { writeStarted.TrySetResult(); return releaseWrite.Task; };
+    queueService.UpdateQuickView(new QuickViewSettings { AdditionalBrowserArguments = "--held" });
+    await writeStarted.Task;
     var inFlight = queueService.FlushAsync();
+    Check(!inFlight.IsCompleted, "flush returns the held write");
     queueService.UpdateQuickView(new QuickViewSettings { AdditionalBrowserArguments = "--during-write" });
+    queueService.WriteStartedForTest = null;
+    releaseWrite.SetResult();
     await inFlight;
-    await queueService.FlushAsync();
     Check(new JsonFileService(queuePath).LoadSettings().QuickView.AdditionalBrowserArguments == "--during-write",
         "save queued during a write is persisted");
 }
