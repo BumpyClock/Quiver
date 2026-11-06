@@ -17,8 +17,11 @@ public class JsonFileService : ISettingsService
     private Settings? settings;
     private PreparedRulesets? preparedRulesets;
     private readonly object saveLock = new();
+    // pendingJson without saveTask means the last write failed; the next save or flush restarts the writer.
     private byte[]? pendingJson;
     private Task? saveTask;
+    // Smoke tests hold a write here, after the snapshot, to queue an edit while it is in flight.
+    internal Func<Task>? WriteStartedForTest { get; set; }
 
     public PreparedRulesets PreparedRulesets => preparedRulesets ??= RuleMatch.PrepareRulesets(LoadSettings().Rulesets);
 
@@ -67,7 +70,7 @@ public class JsonFileService : ISettingsService
         lock (saveLock)
         {
             pendingJson = json;
-            saveTask ??= Task.Run(WritePendingSettingsAsync);
+            saveTask ??= StartWriterLocked();
         }
         SettingsChanged?.Invoke(this, new SettingsChangedEventArgs(section));
     }
@@ -76,9 +79,19 @@ public class JsonFileService : ISettingsService
     {
         lock (saveLock)
         {
-            if (pendingJson is not null) saveTask ??= Task.Run(WritePendingSettingsAsync);
+            if (pendingJson is not null) saveTask ??= StartWriterLocked();
             return saveTask ?? Task.CompletedTask;
         }
+    }
+
+    // Callers that await the task see the failure; the continuation observes it for background saves nobody awaits.
+    private Task StartWriterLocked()
+    {
+        Task task = Task.Run(WritePendingSettingsAsync);
+        task.ContinueWith(
+            static failed => Debug.WriteLine($"Could not save settings: {failed.Exception}"),
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
+        return task;
     }
 
     private async Task WritePendingSettingsAsync()
@@ -99,19 +112,19 @@ public class JsonFileService : ISettingsService
                         return;
                     }
                 }
+                if (WriteStartedForTest is { } writeStarted) await writeStarted().ConfigureAwait(false);
                 string temporaryPath = settingsPath + ".tmp";
                 await File.WriteAllBytesAsync(temporaryPath, json).ConfigureAwait(false);
                 File.Move(temporaryPath, settingsPath, overwrite: true);
             }
         }
-        catch (Exception ex)
+        catch
         {
             lock (saveLock)
             {
                 pendingJson ??= json;
                 saveTask = null;
             }
-            Debug.WriteLine($"Could not save settings: {ex}");
             throw;
         }
     }

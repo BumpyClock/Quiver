@@ -102,4 +102,52 @@ finally
     else File.Delete(blockedDirectory);
 }
 
+// Failed write keeps data pending; a later save (no flush) restarts the writer; edits during a write are not lost.
+var unobserved = new List<Exception>();
+EventHandler<UnobservedTaskExceptionEventArgs> onUnobserved = (_, args) => unobserved.Add(args.Exception);
+TaskScheduler.UnobservedTaskException += onUnobserved;
+string queueBlocked = Path.Combine(fixtureDirectory, Guid.NewGuid().ToString("N"));
+string queuePath = Path.Combine(queueBlocked, "settings.json");
+var queueService = new JsonFileService(queuePath);
+try
+{
+    File.WriteAllText(queueBlocked, "directory blocked by file");
+    queueService.UpdateQuickView(new QuickViewSettings { AdditionalBrowserArguments = "--first" });
+    // WhenAny waits without observing the exception, so only the service's own continuation can observe it.
+    Task? failedWrite = queueService.FlushAsync();
+    await Task.WhenAny(failedWrite);
+    Check(failedWrite.IsFaulted, "background write fails while storage is blocked");
+    failedWrite = null;
+    File.Delete(queueBlocked);
+    queueService.UpdateQuickView(new QuickViewSettings { AdditionalBrowserArguments = "--second" });
+    await queueService.FlushAsync();
+    Check(new JsonFileService(queuePath).LoadSettings().QuickView.AdditionalBrowserArguments == "--second",
+        "save after a failed background write restarts the writer");
+
+    var writeStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    var releaseWrite = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    queueService.WriteStartedForTest = () => { writeStarted.TrySetResult(); return releaseWrite.Task; };
+    queueService.UpdateQuickView(new QuickViewSettings { AdditionalBrowserArguments = "--held" });
+    await writeStarted.Task;
+    var inFlight = queueService.FlushAsync();
+    Check(!inFlight.IsCompleted, "flush returns the held write");
+    queueService.UpdateQuickView(new QuickViewSettings { AdditionalBrowserArguments = "--during-write" });
+    queueService.WriteStartedForTest = null;
+    releaseWrite.SetResult();
+    await inFlight;
+    Check(new JsonFileService(queuePath).LoadSettings().QuickView.AdditionalBrowserArguments == "--during-write",
+        "save queued during a write is persisted");
+}
+finally
+{
+    File.Delete(queuePath);
+    File.Delete(queuePath + ".tmp");
+    if (Directory.Exists(queueBlocked)) Directory.Delete(queueBlocked);
+    else File.Delete(queueBlocked);
+}
+GC.Collect();
+GC.WaitForPendingFinalizers();
+TaskScheduler.UnobservedTaskException -= onUnobserved;
+Check(unobserved.Count == 0, "background save failure is observed");
+
 Console.WriteLine("Settings smoke checks passed.");
