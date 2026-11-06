@@ -119,7 +119,7 @@ public sealed partial class SelectorWindow : Window
 
     private void SelectorWindow_Closed(object sender, WindowEventArgs args)
     {
-        if (!App.IsExiting)
+        if (!App.IsShuttingDown)
         {
             args.Handled = true;
             MinimizeWindow();
