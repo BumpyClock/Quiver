@@ -171,7 +171,7 @@ public partial class QuickViewPageViewModel : ObservableObject
 
     private void LoadBrowserLaunchOptions(IEnumerable<Browser> browsers)
     {
-        foreach (Browser browser in browsers)
+        foreach (Browser browser in browsers.Where(browser => !browser.Hidden))
         {
             BrowserLaunchOptions.Add(new QuickViewBrowserLaunchOption(
                 $"{browser.Name} - Default",

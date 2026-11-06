@@ -122,6 +122,17 @@ finally
     Check(staleAlternate.ResolveBrowserTarget(browsers) is { } t3 && t3.Browser == second && t3.AlternateLaunchId is null,
         "stale alternate launch falls back to the configured browser's default");
 
+    var hiddenFirst = new Browser("HiddenFirst", "hidden.exe") { Hidden = true };
+    Browser[] withHidden = [hiddenFirst, first, second];
+    Check(new QuickViewSettings().ResolveBrowserTarget(withHidden)?.Browser == first, "fallback skips a hidden first browser");
+    Check(new QuickViewSettings { BrowserId = hiddenFirst.Id }.ResolveBrowserTarget(withHidden)?.Browser == first,
+        "configured hidden browser falls back to first visible");
+    Check(new QuickViewSettings { BrowserId = hiddenFirst.Id }.ResolveBrowserTarget([hiddenFirst]) is null, "all hidden resolves to nothing");
+
+    var hiddenListModel = new QuickViewPageViewModel(new IndexSettingsService(new Settings { Browsers = [hiddenFirst, first, second], QuickView = new QuickViewSettings() }));
+    Check(hiddenListModel.BrowserLaunchOptions.All(option => option.BrowserId != hiddenFirst.Id) && hiddenListModel.BrowserLaunchOptions.Count == 3,
+        "launch target list excludes hidden browsers");
+
     var indexSettings = new QuickViewSettings();
     var indexService = new IndexSettingsService(new Settings { Browsers = [first, second], QuickView = indexSettings });
     var indexModel = new QuickViewPageViewModel(indexService);
