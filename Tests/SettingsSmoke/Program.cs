@@ -1,4 +1,5 @@
 using Quiver.App.Services;
+using Quiver.Library;
 using Quiver.App.Services.Interfaces;
 using Quiver.App.ViewModels;
 using Quiver.Library.Models;
@@ -102,6 +103,50 @@ finally
     else File.Delete(blockedDirectory);
 }
 
+// Quick View launch target resolution and index mappings.
+{
+    var first = new Browser("First", "first.exe");
+    var second = new Browser("Second", "second.exe") { AlternateLaunches = [new AlternateLaunch { ItemName = "Work" }] };
+    Browser[] browsers = [first, second];
+    Guid workId = second.AlternateLaunches![0].Id;
+
+    var unset = new QuickViewSettings { LaunchMode = QuickViewLaunchMode.Browser };
+    Check(unset.ResolveBrowserTarget(browsers) is { } t1 && t1.Browser == first && t1.AlternateLaunchId is null, "unset target resolves to first browser");
+    Check(unset.BrowserId is null, "resolving does not rewrite persisted fields");
+    var chosen = new QuickViewSettings { BrowserId = second.Id, AlternateLaunchId = workId };
+    Check(chosen.ResolveBrowserTarget(browsers) is { } t2 && t2.Browser == second && t2.AlternateLaunchId == workId, "configured target is kept");
+    var stale = new QuickViewSettings { BrowserId = Guid.NewGuid() };
+    Check(stale.ResolveBrowserTarget(browsers)?.Browser == first, "stale browser falls back to first");
+    Check(stale.ResolveBrowserTarget([]) is null, "no browsers resolves to nothing");
+    var staleAlternate = new QuickViewSettings { BrowserId = second.Id, AlternateLaunchId = Guid.NewGuid() };
+    Check(staleAlternate.ResolveBrowserTarget(browsers) is { } t3 && t3.Browser == second && t3.AlternateLaunchId is null,
+        "stale alternate launch falls back to the configured browser's default");
+
+    var hiddenFirst = new Browser("HiddenFirst", "hidden.exe") { Hidden = true };
+    Browser[] withHidden = [hiddenFirst, first, second];
+    Check(new QuickViewSettings().ResolveBrowserTarget(withHidden)?.Browser == first, "fallback skips a hidden first browser");
+    Check(new QuickViewSettings { BrowserId = hiddenFirst.Id }.ResolveBrowserTarget(withHidden)?.Browser == first,
+        "configured hidden browser falls back to first visible");
+    Check(new QuickViewSettings { BrowserId = hiddenFirst.Id }.ResolveBrowserTarget([hiddenFirst]) is null, "all hidden resolves to nothing");
+
+    var hiddenListModel = new QuickViewPageViewModel(new IndexSettingsService(new Settings { Browsers = [hiddenFirst, first, second], QuickView = new QuickViewSettings() }));
+    Check(hiddenListModel.BrowserLaunchOptions.All(option => option.BrowserId != hiddenFirst.Id) && hiddenListModel.BrowserLaunchOptions.Count == 3,
+        "launch target list excludes hidden browsers");
+
+    var indexSettings = new QuickViewSettings();
+    var indexService = new IndexSettingsService(new Settings { Browsers = [first, second], QuickView = indexSettings });
+    var indexModel = new QuickViewPageViewModel(indexService);
+    indexModel.Option_LaunchMode = 1;
+    indexModel.Option_ModifierKeys = 2;
+    indexModel.Option_TrackingPrevention = 3;
+    Check(indexSettings.LaunchMode == QuickViewLaunchMode.Browser && indexSettings.ModifierKeys == QuickViewModifierKeys.Ctrl
+        && indexSettings.TrackingPrevention == QuickViewTrackingPreventionLevel.Strict, "index setters map to enums");
+    Check(indexModel.Option_LaunchMode == 1 && indexModel.Option_ModifierKeys == 2 && indexModel.Option_TrackingPrevention == 3, "index getters map from enums");
+    indexModel.Option_TrackingPrevention = 99;
+    Check(indexSettings.TrackingPrevention == QuickViewTrackingPreventionLevel.Balanced, "out of range index uses default");
+    Check(indexModel.Option_BrowserLaunchTarget?.BrowserId == first.Id, "page shows resolved launch target");
+}
+
 // Failed write keeps data pending; a later save (no flush) restarts the writer; edits during a write are not lost.
 var unobserved = new List<Exception>();
 EventHandler<UnobservedTaskExceptionEventArgs> onUnobserved = (_, args) => unobserved.Add(args.Exception);
@@ -151,3 +196,15 @@ TaskScheduler.UnobservedTaskException -= onUnobserved;
 Check(unobserved.Count == 0, "background save failure is observed");
 
 Console.WriteLine("Settings smoke checks passed.");
+
+sealed class IndexSettingsService(Settings settings) : ISettingsService
+{
+    public event EventHandler<SettingsChangedEventArgs>? SettingsChanged;
+    public PreparedRulesets PreparedRulesets => throw new NotSupportedException();
+    public Settings LoadSettings() => settings;
+    public Task FlushAsync() => Task.CompletedTask;
+    public void UpdateAppSettings(AppSettings appSettings) { }
+    public void UpdateQuickView(QuickViewSettings quickView) { }
+    public void UpdateBrowsers(ObservableCollection<Browser> browsers) { }
+    public void UpdateRulesets(ObservableCollection<Ruleset> rulesets) { }
+}

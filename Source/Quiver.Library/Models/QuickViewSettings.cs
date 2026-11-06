@@ -31,7 +31,26 @@ public partial class QuickViewSettings : ObservableObject
     [ObservableProperty]
     [property: JsonConverter(typeof(JsonStringEnumConverter<QuickViewTrackingPreventionLevel>))]
     public partial QuickViewTrackingPreventionLevel TrackingPrevention { get; set; } = QuickViewTrackingPreventionLevel.Balanced;
+
+    // BrowserId/AlternateLaunchId are persisted as-is and only apply in Browser mode. A stale alternate launch
+    // resolves to that browser's default launch; a missing, stale, or hidden browser resolves to the first visible
+    // browser's default launch. Hidden browsers are never Quick View targets. Neither case rewrites the settings.
+    public QuickViewBrowserTarget? ResolveBrowserTarget(IEnumerable<Browser> allBrowsers)
+    {
+        List<Browser> browsers = allBrowsers.Where(browser => !browser.Hidden).ToList();
+        Browser? configured = browsers.FirstOrDefault(browser => browser.Id == BrowserId);
+        if (configured is not null)
+        {
+            bool alternateExists = configured.AlternateLaunches?.Any(launch => launch.Id == AlternateLaunchId) == true;
+            return new QuickViewBrowserTarget(configured, alternateExists ? AlternateLaunchId : null);
+        }
+
+        Browser? first = browsers.FirstOrDefault();
+        return first is null ? null : new QuickViewBrowserTarget(first, null);
+    }
 }
+
+public sealed record QuickViewBrowserTarget(Browser Browser, Guid? AlternateLaunchId);
 
 public enum QuickViewLaunchMode
 {
