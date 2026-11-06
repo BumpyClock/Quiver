@@ -21,7 +21,7 @@ public class JsonFileService : ISettingsService
     private byte[]? pendingJson;
     private Task? saveTask;
     // Smoke tests hold a write here, after the snapshot, to queue an edit while it is in flight.
-    internal Func<Task>? WriteStartedForTest;
+    internal Func<Task>? WriteStartedForTest { get; set; }
 
     public PreparedRulesets PreparedRulesets => preparedRulesets ??= RuleMatch.PrepareRulesets(LoadSettings().Rulesets);
 
