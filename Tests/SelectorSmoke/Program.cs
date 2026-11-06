@@ -128,8 +128,10 @@ public sealed partial class SmokeApplication : Application
         }
         finally
         {
-            typeof(Quiver.App.App).GetProperty("IsExiting", BindingFlags.Static | BindingFlags.NonPublic)!
-                .SetValue(null, true);
+            var app = typeof(Quiver.App.App);
+            var shuttingDown = app.GetNestedType("AppState", BindingFlags.NonPublic)!.GetNestedType("ShuttingDown")!;
+            app.GetField("state", BindingFlags.Static | BindingFlags.NonPublic)!
+                .SetValue(null, Activator.CreateInstance(shuttingDown));
             if (window is not null)
             {
                 window.Content = null;

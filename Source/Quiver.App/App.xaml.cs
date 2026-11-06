@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Dispatching;
 using Microsoft.Windows.AppLifecycle;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -28,14 +29,24 @@ public partial class App : Microsoft.UI.Xaml.Application
     private static SelectorWindow? _selectorWindow;
     private static SettingsWindow? _settingsWindow;
     private readonly DispatcherQueue dispatcherQueue;
-    private CliArgs? _pendingActivation;
-    private CliArgs? _matchingActivation;
-    private CancellationTokenSource? _activationCancellation;
-    private bool isLaunched;
+    private static AppState state = new AppState.PreLaunch([]);
     private TrayService? trayService;
     private static bool fatalExit;
 
-    internal static bool IsExiting { get; private set; }
+    // Exiting returns to Idle when the flush fails. ShuttingDown has disposed the tray and stopped the
+    // icon loader, so nothing leaves it.
+    private abstract record AppState
+    {
+        private AppState() { }
+
+        public sealed record PreLaunch(List<CliArgs> Redirected) : AppState;
+        public sealed record Idle : AppState;
+        public sealed record Matching(CliArgs Activation, CancellationTokenSource Cancellation) : AppState;
+        public sealed record Exiting(CliArgs? Deferred) : AppState;
+        public sealed record ShuttingDown : AppState;
+    }
+
+    internal static bool IsShuttingDown => state is AppState.ShuttingDown;
 
     public App()
     {
@@ -71,9 +82,17 @@ public partial class App : Microsoft.UI.Xaml.Application
 
     protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {
-        isLaunched = true;
-        HandleActivation(_pendingActivation ?? CliArgs.GatherInfo(AppInstance.GetCurrent().GetActivatedEventArgs(), false));
-        _pendingActivation = null;
+        if (state is not AppState.PreLaunch launch)
+        {
+            return;
+        }
+
+        state = new AppState.Idle();
+        HandleActivation(CliArgs.GatherInfo(AppInstance.GetCurrent().GetActivatedEventArgs(), false));
+        foreach (CliArgs redirected in launch.Redirected)
+        {
+            HandleActivation(redirected);
+        }
         RegisterJumpList();
     }
 
@@ -102,12 +121,6 @@ public partial class App : Microsoft.UI.Xaml.Application
     private void AppInstance_Activated(object? sender, AppActivationArguments args)
     {
         // Read redirected arguments on the thread that received them; their Data is not usable from the UI thread.
-        if (!isLaunched)
-        {
-            _pendingActivation = CliArgs.GatherInfo(args, false);
-            return;
-        }
-
         var cliArgs = CliArgs.GatherInfo(args, true);
         _ = dispatcherQueue.TryEnqueue(() => HandleActivation(cliArgs));
     }
@@ -115,25 +128,36 @@ public partial class App : Microsoft.UI.Xaml.Application
     private void SettingsChanged(object? sender, SettingsChangedEventArgs e)
     {
         if ((e.Section & (SettingsSection.Rulesets | SettingsSection.Browsers | SettingsSection.AppSettings)) != 0
-            && _matchingActivation is { } activation)
+            && state is AppState.Matching matching)
         {
-            MatchRulesAndShowSelector(activation);
+            MatchRulesAndShowSelector(matching.Activation);
         }
     }
 
-    private void CancelActivation()
+    private static void CancelActivation()
     {
-        _activationCancellation?.Cancel();
-        _matchingActivation = null;
+        if (state is AppState.Matching matching)
+        {
+            matching.Cancellation.Cancel();
+            state = new AppState.Idle();
+        }
     }
 
     private void HandleActivation(CliArgs cliArgs)
     {
-        CancelActivation();
-        if (IsExiting)
+        switch (state)
         {
-            return;
+            case AppState.PreLaunch launch:
+                launch.Redirected.Add(cliArgs);
+                return;
+            case AppState.Exiting exiting:
+                state = exiting with { Deferred = cliArgs };
+                return;
+            case AppState.ShuttingDown:
+                return;
         }
+
+        CancelActivation();
         IServiceProvider services = Services ?? throw new InvalidOperationException("Application services are not configured.");
 
         if (cliArgs.SettingsPage is string page)
@@ -153,7 +177,7 @@ public partial class App : Microsoft.UI.Xaml.Application
     private async void MatchRulesAndShowSelector(CliArgs cliArgs)
     {
         CancelActivation();
-        if (IsExiting) return;
+        if (state is not AppState.Idle) return;
         IServiceProvider services = Services ?? throw new InvalidOperationException("Application services are not configured.");
 
         var settingsService = services.GetRequiredService<ISettingsService>();
@@ -162,12 +186,11 @@ public partial class App : Microsoft.UI.Xaml.Application
         {
             var snapshot = settingsService.PreparedRulesets;
             using var cancellation = new CancellationTokenSource();
-            _activationCancellation = cancellation;
-            _matchingActivation = cliArgs;
+            state = new AppState.Matching(cliArgs, cancellation);
             try
             {
                 var match = await Task.Run(() => snapshot.Check(url, cancellation.Token), cancellation.Token);
-                if (cancellation.IsCancellationRequested || IsExiting)
+                if (cancellation.IsCancellationRequested)
                 {
                     return;
                 }
@@ -194,10 +217,9 @@ public partial class App : Microsoft.UI.Xaml.Application
             }
             finally
             {
-                if (ReferenceEquals(_activationCancellation, cancellation))
+                if (state is AppState.Matching current && ReferenceEquals(current.Cancellation, cancellation))
                 {
-                    _activationCancellation = null;
-                    _matchingActivation = null;
+                    state = new AppState.Idle();
                 }
             }
         }
@@ -214,31 +236,42 @@ public partial class App : Microsoft.UI.Xaml.Application
         _selectorWindow.ShowWindow();
     }
 
-    private async void ReloadApp()
-    {
-        IsExiting = true;
-        CancelActivation();
-        if (!await FlushPendingWorkAsync())
-        {
-            IsExiting = false;
-            return;
-        }
-        trayService?.Dispose();
-        var reason = AppInstance.Restart(string.Empty);
-        Debug.WriteLine($"Restart failed: {reason}");
-        ExitApp();
-    }
+    private void ReloadApp() => ExitApp(restart: true);
 
-    private async void ExitApp()
+    private void ExitApp() => ExitApp(restart: false);
+
+    private async void ExitApp(bool restart)
     {
-        IsExiting = true;
-        CancelActivation();
-        if (!await FlushPendingWorkAsync())
+        if (state is AppState.Exiting or AppState.ShuttingDown)
         {
-            IsExiting = false;
             return;
         }
+
+        CancelActivation();
+        state = new AppState.Exiting(Deferred: null);
+        bool flushed = await FlushPendingWorkAsync();
+        if (state is not AppState.Exiting exiting)
+        {
+            return;
+        }
+
+        if (!flushed)
+        {
+            state = new AppState.Idle();
+            if (exiting.Deferred is { } deferred)
+            {
+                HandleActivation(deferred);
+            }
+            return;
+        }
+
+        state = new AppState.ShuttingDown();
         trayService?.Dispose();
+        if (restart)
+        {
+            var reason = AppInstance.Restart(string.Empty);
+            Debug.WriteLine($"Restart failed: {reason}");
+        }
         Exit();
     }
 
@@ -268,8 +301,8 @@ public partial class App : Microsoft.UI.Xaml.Application
 
     private async void DispatcherQueue_ShutdownStarting(DispatcherQueue sender, DispatcherQueueShutdownStartingEventArgs args)
     {
-        IsExiting = true;
         CancelActivation();
+        state = new AppState.ShuttingDown();
         trayService?.Dispose();
         dispatcherQueue.ShutdownStarting -= DispatcherQueue_ShutdownStarting;
         var deferral = args.GetDeferral();
@@ -285,7 +318,7 @@ public partial class App : Microsoft.UI.Xaml.Application
 
     public static void ShowSettings(string page = "browsers")
     {
-        ((App)Current).CancelActivation();
+        CancelActivation();
         _selectorWindow?.MinimizeWindow();
         if (_settingsWindow is null)
         {
