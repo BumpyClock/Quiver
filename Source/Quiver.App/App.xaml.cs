@@ -160,13 +160,13 @@ public partial class App : Microsoft.UI.Xaml.Application
         CancelActivation();
         IServiceProvider services = Services ?? throw new InvalidOperationException("Application services are not configured.");
 
-        if (cliArgs.SettingsPage is string page)
+        if (cliArgs is CliArgs.OpenSettings settings)
         {
-            ShowSettings(page);
+            ShowSettings(settings.Page);
             return;
         }
 
-        if (services.GetRequiredService<IQuickViewService>().TryOpenIfModifierKeyActivated(cliArgs.Url))
+        if (services.GetRequiredService<IQuickViewService>().TryOpenIfModifierKeyActivated((cliArgs as CliArgs.OpenUrl)?.Url))
         {
             return;
         }
@@ -182,8 +182,9 @@ public partial class App : Microsoft.UI.Xaml.Application
 
         var settingsService = services.GetRequiredService<ISettingsService>();
         var settings = settingsService.LoadSettings();
-        if (cliArgs.Url is { } url && settings.AppSettings.RuleMatching)
+        if (settings.AppSettings.RuleMatching)
         {
+            string url = (cliArgs as CliArgs.OpenUrl)?.Url ?? string.Empty;
             var snapshot = settingsService.PreparedRulesets;
             using var cancellation = new CancellationTokenSource();
             state = new AppState.Matching(cliArgs, cancellation);

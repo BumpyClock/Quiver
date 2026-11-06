@@ -48,6 +48,7 @@ public sealed partial class SmokeApplication : Application
         string resultPath = Path.Combine(AppContext.BaseDirectory, "selector-smoke-result.txt");
         try
         {
+            CliArgsChecks.Run();
             CheckMetrics();
             services = new ServiceCollection()
                 .AddSingleton<ISettingsService, TestSettings>()

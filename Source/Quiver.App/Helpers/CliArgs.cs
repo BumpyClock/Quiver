@@ -1,7 +1,6 @@
 using Quiver.Library;
 using Microsoft.Windows.AppLifecycle;
 using System;
-using System.Collections.Generic;
 using System.CommandLine;
 using System.IO;
 using System.Threading.Tasks;
@@ -9,8 +8,15 @@ using Windows.ApplicationModel.Activation;
 
 namespace Quiver.App.Helpers;
 
-public partial class CliArgs
+public abstract record CliArgs
 {
+    private CliArgs() { }
+
+    public sealed record OpenSettings(string Page) : CliArgs;
+    public sealed record Minimized : CliArgs;
+    public sealed record OpenUrl(string Url) : CliArgs;
+    public sealed record Empty : CliArgs;
+
     // CLI Options and Arguments
     private static readonly Option<bool> MinimizedOption = new("--minimized");
     private static readonly Option<string?> UriOption = new("--uri");
@@ -23,74 +29,45 @@ public partial class CliArgs
 
     private static readonly RootCommand CliRoot = CreateRootCommand();
 
-    // Properties to store parsed info
-    public bool IsSecondInstance = false;
-    public bool IsRunAsMin = false;
-    public bool IsProtocolActivated = false;
-    public string? SettingsPage { get; private set; }
-    public string Url { get; set; } = string.Empty;
+    private const string ProtocolPrefix = "quiver://";
 
-    private CliArgs(ParseResult parseResult, bool isSecondInstance)
+    public static CliArgs Parse(string commandLine) => Parse(CliRoot.Parse(commandLine));
+
+    private static CliArgs Parse(ParseResult parseResult)
     {
-        IsSecondInstance = isSecondInstance;
-        IsRunAsMin = parseResult.GetValue(MinimizedOption);
+        bool minimized = parseResult.GetValue(MinimizedOption);
         string? page = parseResult.GetValue(PageOption);
         if (parseResult.GetValue(SettingsOption) || page is not null)
         {
-            SettingsPage = string.IsNullOrWhiteSpace(page) ? "browsers" : page;
-            return;
+            return new OpenSettings(string.IsNullOrWhiteSpace(page) ? "browsers" : page);
         }
 
-        var values = new List<string>(parseResult.GetValue(ValuesArgument) ?? []);
+        string[] values = parseResult.GetValue(ValuesArgument) ?? [];
         string? uriValue = parseResult.GetValue(UriOption);
 
-        if (IsRunAsMin)
+        if (minimized)
         {
-            return;
+            return new Minimized();
         }
-
-        TrimExecutablePath(values);
 
         if (!string.IsNullOrWhiteSpace(uriValue))
         {
-            AssignUrl(uriValue);
-            return;
+            return ToOpenUrl(uriValue);
         }
 
-        if (values.Count == 0)
-        {
-            return;
-        }
-
-        AssignUrl(values[0]);
+        int first = values.Length > 0
+            && string.Equals(values[0], Environment.ProcessPath ?? string.Empty, StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+        return values.Length > first ? ToOpenUrl(values[first]) : new Empty();
     }
 
-    private const string ProtocolPrefix = "quiver://";
-
-    private void AssignUrl(string value)
+    private static OpenUrl ToOpenUrl(string value)
     {
         if (value.StartsWith(ProtocolPrefix, StringComparison.OrdinalIgnoreCase))
         {
-            IsProtocolActivated = true;
-            Url = value[ProtocolPrefix.Length..];
-            return;
+            return new OpenUrl(value[ProtocolPrefix.Length..]);
         }
 
-        Url = value.Contains(' ') ? $"\"{value}\"" : value;
-    }
-
-    private static void TrimExecutablePath(List<string> values)
-    {
-        if (values.Count == 0)
-        {
-            return;
-        }
-
-        string currentExe = Environment.ProcessPath ?? string.Empty;
-        if (string.Equals(values[0], currentExe, StringComparison.OrdinalIgnoreCase))
-        {
-            values.RemoveAt(0);
-        }
+        return new OpenUrl(value.Contains(' ') ? $"\"{value}\"" : value);
     }
 
     public static CliArgs GatherInfo(AppActivationArguments activationArgs, bool isSecondInstance)
@@ -98,18 +75,14 @@ public partial class CliArgs
         if (activationArgs.Kind == ExtendedActivationKind.Protocol
             && activationArgs.Data is IProtocolActivatedEventArgs protocolArgs)
         {
-            var protocol = new CliArgs(CliRoot.Parse(Array.Empty<string>()), isSecondInstance);
-            protocol.AssignUrl(protocolArgs.Uri.OriginalString);
-            return protocol;
+            return ToOpenUrl(protocolArgs.Uri.OriginalString);
         }
 
         if (activationArgs.Kind == ExtendedActivationKind.File
             && activationArgs.Data is IFileActivatedEventArgs fileArgs
             && fileArgs.Files.Count > 0)
         {
-            var file = new CliArgs(CliRoot.Parse(Array.Empty<string>()), isSecondInstance);
-            file.AssignUrl(fileArgs.Files[0].Path);
-            return file;
+            return ToOpenUrl(fileArgs.Files[0].Path);
         }
 
         var rawCommandLine = GetActivationCommandLine(activationArgs);
@@ -127,7 +100,7 @@ public partial class CliArgs
         });
 #endif
 
-        return new CliArgs(parseResult, isSecondInstance);
+        return Parse(parseResult);
     }
 
     private static RootCommand CreateRootCommand()
