@@ -21,6 +21,12 @@ foreach ($project in @('Source/Quiver.App', 'Tests/RuleMatchSmoke', 'Tests/Setti
 }
 Invoke-Checked 'rustup' @('run', '1.97.1', 'cargo', 'fmt', '--all', '--', '--check')
 Invoke-Checked 'rustup' @('run', '1.97.1', 'cargo', 'check', '--workspace', '--locked', '--offline')
-Invoke-Checked 'dotnet' @('build', 'Source/Quiver.App/Quiver.App.csproj', '--no-restore', '-c', 'Debug', '-p:GenerateAppxPackageOnBuild=false', '-p:AppxPackageSigningEnabled=false')
+# Build for the host architecture so the App project picks the matching NativeMessagingHost target.
+$platform = switch ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture) {
+    'X64' { 'x64' }
+    'Arm64' { 'arm64' }
+    default { throw "Unsupported host architecture $_. Quiver builds x64 and arm64 only." }
+}
+Invoke-Checked 'dotnet' @('build', 'Source/Quiver.App/Quiver.App.csproj', '--no-restore', '-c', 'Debug', '-r', "win-$platform", "-p:Platform=$platform", '-p:GenerateAppxPackageOnBuild=false', '-p:AppxPackageSigningEnabled=false')
 Invoke-Checked 'dotnet' @('run', '--project', 'Tests/RuleMatchSmoke/RuleMatchSmoke.csproj', '--no-restore')
 Invoke-Checked 'dotnet' @('run', '--project', 'Tests/SettingsSmoke/SettingsSmoke.csproj', '--no-restore')

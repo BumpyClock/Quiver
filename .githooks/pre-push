@@ -5,8 +5,6 @@ cd "$(git rev-parse --show-toplevel)"
 head=$(git rev-parse HEAD)
 required=0
 updates=0
-paths=$(mktemp)
-trap 'rm -f "$paths"' EXIT
 while read -r local_ref local_oid remote_ref remote_oid extra || [[ -n ${local_ref:-}${local_oid:-}${remote_ref:-}${remote_oid:-}${extra:-} ]]; do
   updates=1
   if [[ -n ${extra:-} || ! $local_oid =~ ^[0-9a-f]+$ || ! $remote_oid =~ ^[0-9a-f]+$ || ${#local_oid} != ${#head} || ${#remote_oid} != ${#head} ]]; then
@@ -17,16 +15,8 @@ while read -r local_ref local_oid remote_ref remote_oid extra || [[ -n ${local_r
   if [[ $commit != "$head" ]]; then
     echo 'Push only checked-out HEAD. Validate other refs in their own clean checkout.' >&2; exit 1
   fi
-  if [[ $remote_oid =~ ^0+$ ]] || ! base=$(git rev-parse --verify "$remote_oid^{commit}" 2>/dev/null); then
-    required=1
-    continue
-  fi
-  git diff --no-ext-diff --name-only --no-renames -z "$base" "$commit" > "$paths"
-  # Empty/unknown ranges broaden to full automation checks.
-  [[ -s $paths ]] || required=1
-  while IFS= read -r -d '' path; do
-    required=1
-  done < "$paths"
+  # Every nondeleted ref gets the full checks. No path-based skipping.
+  required=1
 done
 [[ $updates == 1 ]] || required=1
 [[ $required == 1 ]] || exit 0

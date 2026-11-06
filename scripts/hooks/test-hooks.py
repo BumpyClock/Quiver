@@ -153,16 +153,6 @@ class HookTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue(self.checked())
 
-    def test_content_only_skip_and_instruction_fallback(self):
-        if not (SOURCE / "package.json").exists() or 'personal-assistant' not in (SOURCE / "package.json").read_text():
-            self.skipTest("PersonalAssistant content policy only")
-        self.update("notes.md")
-        self.hook()
-        self.assertFalse(self.checked())
-        self.update("AGENTS.md")
-        self.hook()
-        self.assertTrue(self.checked())
-
 
 if __name__ == "__main__":
     unittest.main()
