@@ -43,9 +43,9 @@ public sealed partial class SelectorWindow : Window
 
     private readonly BackdropShapeLayer backdropLayer;
 
-    private bool isHiddenToTray = true;
-    private bool isClosed;
-    private bool metricsApplied;
+    private enum SelectorState { Hidden, Shown, Closed }
+
+    private SelectorState state = SelectorState.Hidden;
     private bool resizeQueued;
     private RadialMetrics metrics;
     private (RadialMetrics Metrics, int Width, int Height)? appliedShape;
@@ -84,7 +84,9 @@ public sealed partial class SelectorWindow : Window
         DiscRoot.ActualThemeChanged += DiscRoot_ActualThemeChanged;
         AppWindow.Changed += AppWindow_Changed;
         settingsService.SettingsChanged += SettingsChanged;
-        ApplyMetrics();
+        metrics = RadialMetrics.For(ViewModel.Browsers.Count);
+        ApplyLayout();
+        Select(selectedIndex);
     }
 
     public void Init(CliArgs args)
@@ -102,7 +104,7 @@ public sealed partial class SelectorWindow : Window
 
     private void Window_Activated(object sender, WindowActivatedEventArgs args)
     {
-        if (args.WindowActivationState != WindowActivationState.Deactivated || isHiddenToTray)
+        if (args.WindowActivationState != WindowActivationState.Deactivated || state != SelectorState.Shown)
         {
             return;
         }
@@ -127,7 +129,7 @@ public sealed partial class SelectorWindow : Window
         }
 
         settingsService.SettingsChanged -= SettingsChanged;
-        isClosed = true;
+        state = SelectorState.Closed;
         ViewModel.CancelIconLoading();
         ViewModel.BrowserLaunched -= ViewModel_BrowserLaunched;
         ViewModel.PropertyChanged -= ViewModel_PropertyChanged;
@@ -144,7 +146,8 @@ public sealed partial class SelectorWindow : Window
     #region Window Lifecycle Helper methods
     internal void MinimizeWindow()
     {
-        isHiddenToTray = true;
+        if (state == SelectorState.Closed) return;
+        state = SelectorState.Hidden;
         EditUrlFlyout.Hide();
         LinkMenu.Hide();
         AppWindow.Hide();
@@ -152,8 +155,9 @@ public sealed partial class SelectorWindow : Window
 
     public void ShowWindow()
     {
+        if (state == SelectorState.Closed) return;
         ViewModel.RefreshBrowsers();
-        isHiddenToTray = false;
+        state = SelectorState.Shown;
         ApplyMetrics();
         Select(0);
         var bounds = CursorPosition.AnchoredAtCursor(metrics.WindowWidth, metrics.WindowHeight, metrics.FlowerCenter);
@@ -172,14 +176,14 @@ public sealed partial class SelectorWindow : Window
     private void ResizeAroundFlowerCenter()
     {
         resizeQueued = false;
-        if (isClosed)
+        if (state == SelectorState.Closed)
         {
             return;
         }
 
         var previous = metrics;
         bool changed = ApplyMetrics();
-        if (isHiddenToTray)
+        if (state == SelectorState.Hidden)
         {
             return;
         }
@@ -200,21 +204,25 @@ public sealed partial class SelectorWindow : Window
     private bool ApplyMetrics()
     {
         var next = RadialMetrics.For(ViewModel.Browsers.Count);
-        bool changed = !metricsApplied || metrics != next;
-        metrics = next;
+        bool changed = metrics != next;
         if (changed)
         {
-            metricsApplied = true;
-            FlowerHost.Width = metrics.FlowerSize;
-            FlowerHost.Height = metrics.FlowerHeight;
-            FlowerHost.Margin = new Thickness(0, metrics.FlowerTop, 0, 0);
-            NamePill.Width = metrics.PillWidth;
-            NamePill.Height = RadialMetrics.PillHeight;
-            NamePill.Margin = new Thickness(0, metrics.PillTop, 0, 0);
-            HubButton.Visibility = metrics.CenterFillRadius > 0 ? Visibility.Visible : Visibility.Collapsed;
+            metrics = next;
+            ApplyLayout();
         }
         Select(selectedIndex);
         return changed;
+    }
+
+    private void ApplyLayout()
+    {
+        FlowerHost.Width = metrics.FlowerSize;
+        FlowerHost.Height = metrics.FlowerHeight;
+        FlowerHost.Margin = new Thickness(0, metrics.FlowerTop, 0, 0);
+        NamePill.Width = metrics.PillWidth;
+        NamePill.Height = RadialMetrics.PillHeight;
+        NamePill.Margin = new Thickness(0, metrics.PillTop, 0, 0);
+        HubButton.Visibility = metrics.CenterFillRadius > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void UpdateShape()
@@ -524,7 +532,7 @@ public sealed partial class SelectorWindow : Window
 
     private void QueueGeometryUpdate()
     {
-        if (isClosed || resizeQueued)
+        if (state == SelectorState.Closed || resizeQueued)
         {
             return;
         }
@@ -587,7 +595,7 @@ public sealed partial class SelectorWindow : Window
 
     private void EditUrlFlyout_Closed(object sender, object e)
     {
-        if (!isHiddenToTray)
+        if (state == SelectorState.Shown)
         {
             FocusSelection();
         }
