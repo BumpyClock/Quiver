@@ -25,8 +25,8 @@ Configure it in **Quiver Settings > Quick View**, or add the following top-level
 - `Enabled` controls both the shortcut and the **Quick View** item in the selector's link menu.
 - `LaunchMode` is `WebView` for the built-in preview or `Browser` to launch a configured browser directly. The selector's **Quick View** item uses this setting too.
 - `ModifierKeys` supports `Alt`, `CtrlAlt`, or `Ctrl`.
-- `BrowserId` selects a browser by its `Id` when `LaunchMode` is `Browser`. 
-- `AlternateLaunchId` selects one of that browser's alternate launches, `null` uses its default launch.
+- `BrowserId` selects a browser by its `Id` when `LaunchMode` is `Browser`. If it is unset or no longer matches a browser, the first browser's default launch is used.
+- `AlternateLaunchId` selects one of that browser's alternate launches. `null`, or an id that no longer exists, uses its default launch.
 
 ### WebView2 Configuration
 - Additional browser arguments are saved when you leave the text field, navigate to another settings page,

@@ -104,19 +104,12 @@ public sealed class QuickViewService(
 
     private bool TryOpenBrowser(string url, IEnumerable<Browser> browsers, QuickViewSettings quickView)
     {
-        if (quickView.BrowserId is not Guid browserId)
+        if (quickView.ResolveBrowserTarget(browsers) is not { } target)
         {
             return false;
         }
 
-        Browser? browser = browsers.FirstOrDefault(browser => browser.Id == browserId);
-
-        if (browser is null)
-        {
-            return false;
-        }
-
-        UriLauncher.ResolveAutomatically(url, browser, quickView.AlternateLaunchId);
+        UriLauncher.ResolveAutomatically(url, target.Browser, target.AlternateLaunchId);
         return true;
     }
 }

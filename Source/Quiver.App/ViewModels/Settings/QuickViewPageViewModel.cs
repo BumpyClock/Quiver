@@ -22,7 +22,6 @@ public partial class QuickViewPageViewModel : ObservableObject
     {
         QuickView = settingsService.LoadSettings().QuickView ?? new QuickViewSettings();
         LoadBrowserLaunchOptions(settingsService.LoadSettings().Browsers);
-        EnsureBrowserLaunchTarget();
         this.settingsService = settingsService;
     }
 
@@ -46,16 +45,10 @@ public partial class QuickViewPageViewModel : ObservableObject
 
     public int Option_LaunchMode
     {
-        get => QuickView.LaunchMode switch
-        {
-            QuickViewLaunchMode.Browser => 1,
-            _ => 0
-        };
+        get => ToIndex(QuickView.LaunchMode);
         set
         {
-            QuickViewLaunchMode launchMode = value == 1
-                ? QuickViewLaunchMode.Browser
-                : QuickViewLaunchMode.WebView;
+            QuickViewLaunchMode launchMode = FromIndex(value, QuickViewLaunchMode.WebView);
 
             if (QuickView.LaunchMode == launchMode)
             {
@@ -63,7 +56,6 @@ public partial class QuickViewPageViewModel : ObservableObject
             }
 
             QuickView.LaunchMode = launchMode;
-            EnsureBrowserLaunchTarget();
             SaveQuickView();
             OnPropertyChanged();
             OnPropertyChanged(nameof(WebViewOptionsEnabled));
@@ -74,20 +66,10 @@ public partial class QuickViewPageViewModel : ObservableObject
 
     public int Option_ModifierKeys
     {
-        get => QuickView.ModifierKeys switch
-        {
-            QuickViewModifierKeys.CtrlAlt => 1,
-            QuickViewModifierKeys.Ctrl => 2,
-            _ => 0
-        };
+        get => ToIndex(QuickView.ModifierKeys);
         set
         {
-            QuickViewModifierKeys modifierKeys = value switch
-            {
-                1 => QuickViewModifierKeys.CtrlAlt,
-                2 => QuickViewModifierKeys.Ctrl,
-                _ => QuickViewModifierKeys.Alt
-            };
+            QuickViewModifierKeys modifierKeys = FromIndex(value, QuickViewModifierKeys.Alt);
 
             if (QuickView.ModifierKeys == modifierKeys)
             {
@@ -102,8 +84,16 @@ public partial class QuickViewPageViewModel : ObservableObject
 
     public QuickViewBrowserLaunchOption? Option_BrowserLaunchTarget
     {
-        get => BrowserLaunchOptions.FirstOrDefault(option =>
-            option.BrowserId == QuickView.BrowserId && option.AlternateLaunchId == QuickView.AlternateLaunchId);
+        get
+        {
+            if (QuickView.ResolveBrowserTarget(settingsService.LoadSettings().Browsers) is not { } target)
+            {
+                return null;
+            }
+
+            return BrowserLaunchOptions.FirstOrDefault(option =>
+                option.BrowserId == target.Browser.Id && option.AlternateLaunchId == target.AlternateLaunchId);
+        }
         set
         {
             if (value is null || value == Option_BrowserLaunchTarget)
@@ -152,22 +142,10 @@ public partial class QuickViewPageViewModel : ObservableObject
 
     public int Option_TrackingPrevention
     {
-        get => QuickView.TrackingPrevention switch
-        {
-            QuickViewTrackingPreventionLevel.None => 0,
-            QuickViewTrackingPreventionLevel.Basic => 1,
-            QuickViewTrackingPreventionLevel.Strict => 3,
-            _ => 2
-        };
+        get => ToIndex(QuickView.TrackingPrevention);
         set
         {
-            QuickViewTrackingPreventionLevel trackingPrevention = value switch
-            {
-                0 => QuickViewTrackingPreventionLevel.None,
-                1 => QuickViewTrackingPreventionLevel.Basic,
-                3 => QuickViewTrackingPreventionLevel.Strict,
-                _ => QuickViewTrackingPreventionLevel.Balanced
-            };
+            QuickViewTrackingPreventionLevel trackingPrevention = FromIndex(value, QuickViewTrackingPreventionLevel.Balanced);
 
             if (QuickView.TrackingPrevention == trackingPrevention)
             {
@@ -215,18 +193,13 @@ public partial class QuickViewPageViewModel : ObservableObject
         }
     }
 
-    private void EnsureBrowserLaunchTarget()
-    {
-        if (QuickView.LaunchMode != QuickViewLaunchMode.Browser
-            || BrowserLaunchOptions.Count == 0
-            || Option_BrowserLaunchTarget is not null)
-        {
-            return;
-        }
+    // ComboBox item order in QuickViewPage.xaml follows the enum declaration order.
+    private static int ToIndex<T>(T value) where T : struct, Enum => Array.IndexOf(Enum.GetValues<T>(), value);
 
-        QuickViewBrowserLaunchOption option = BrowserLaunchOptions[0];
-        QuickView.BrowserId = option.BrowserId;
-        QuickView.AlternateLaunchId = option.AlternateLaunchId;
+    private static T FromIndex<T>(int index, T fallback) where T : struct, Enum
+    {
+        T[] values = Enum.GetValues<T>();
+        return index >= 0 && index < values.Length ? values[index] : fallback;
     }
 }
 
