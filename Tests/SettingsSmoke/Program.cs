@@ -102,4 +102,41 @@ finally
     else File.Delete(blockedDirectory);
 }
 
+// Failed write keeps data pending; a later save (no flush) restarts the writer; edits during a write are not lost.
+var unobserved = new List<Exception>();
+EventHandler<UnobservedTaskExceptionEventArgs> onUnobserved = (_, args) => unobserved.Add(args.Exception);
+TaskScheduler.UnobservedTaskException += onUnobserved;
+string queueBlocked = Path.Combine(fixtureDirectory, Guid.NewGuid().ToString("N"));
+string queuePath = Path.Combine(queueBlocked, "settings.json");
+var queueService = new JsonFileService(queuePath);
+try
+{
+    File.WriteAllText(queueBlocked, "directory blocked by file");
+    queueService.UpdateQuickView(new QuickViewSettings { AdditionalBrowserArguments = "--first" });
+    await Task.Delay(200);
+    File.Delete(queueBlocked);
+    queueService.UpdateQuickView(new QuickViewSettings { AdditionalBrowserArguments = "--second" });
+    await queueService.FlushAsync();
+    Check(new JsonFileService(queuePath).LoadSettings().QuickView.AdditionalBrowserArguments == "--second",
+        "save after a failed background write restarts the writer");
+
+    var inFlight = queueService.FlushAsync();
+    queueService.UpdateQuickView(new QuickViewSettings { AdditionalBrowserArguments = "--during-write" });
+    await inFlight;
+    await queueService.FlushAsync();
+    Check(new JsonFileService(queuePath).LoadSettings().QuickView.AdditionalBrowserArguments == "--during-write",
+        "save queued during a write is persisted");
+}
+finally
+{
+    File.Delete(queuePath);
+    File.Delete(queuePath + ".tmp");
+    if (Directory.Exists(queueBlocked)) Directory.Delete(queueBlocked);
+    else File.Delete(queueBlocked);
+}
+GC.Collect();
+GC.WaitForPendingFinalizers();
+TaskScheduler.UnobservedTaskException -= onUnobserved;
+Check(unobserved.Count == 0, "background save failure is observed");
+
 Console.WriteLine("Settings smoke checks passed.");
