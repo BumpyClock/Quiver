@@ -564,9 +564,9 @@ public sealed partial class SelectorWindow : Window
 
     private void EditUrlBtnClick(object sender, RoutedEventArgs e) => ShowEditUrlFlyout();
 
-    private void SettingsBtnClick(object sender, RoutedEventArgs e) => App.ShowSettings("settings");
+    private void SettingsBtnClick(object sender, RoutedEventArgs e) => App.ShowSettings(SettingsTab.Settings);
 
-    private void RulesBtnClick(object sender, RoutedEventArgs e) => App.ShowSettings("rulesets");
+    private void RulesBtnClick(object sender, RoutedEventArgs e) => App.ShowSettings(SettingsTab.Rulesets);
 
     private void QuickViewBtnClick(object sender, RoutedEventArgs e)
     {
@@ -716,7 +716,7 @@ public sealed partial class SelectorWindow : Window
             return;
         }
 
-        App.ShowSettings("rulesets");
+        App.ShowSettings(SettingsTab.Rulesets);
         args.Handled = true;
     }
 

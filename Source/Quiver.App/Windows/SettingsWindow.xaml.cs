@@ -1,4 +1,5 @@
 using CommunityToolkit.WinUI;
+using Quiver.App.Helpers;
 using Quiver.App.Services.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
@@ -12,8 +13,9 @@ namespace Quiver.App.Windows;
 
 public sealed partial class SettingsWindow : Window
 {
-    private bool closeAfterFlush;
-    private bool isFlushing;
+    private enum CloseState { Open, Saving, ReadyToClose }
+
+    private CloseState closeState;
 
     public SettingsWindow()
     {
@@ -25,15 +27,15 @@ public sealed partial class SettingsWindow : Window
         SystemBackdrop = new MicaBackdrop();
         AppWindow.Closing += async (_, args) =>
         {
-            if (closeAfterFlush) return;
+            if (closeState == CloseState.ReadyToClose) return;
             args.Cancel = true;
-            if (isFlushing) return;
-            isFlushing = true;
+            if (closeState == CloseState.Saving) return;
+            closeState = CloseState.Saving;
             try
             {
                 CommitPendingEdits();
                 await App.Services!.GetRequiredService<ISettingsService>().FlushAsync();
-                closeAfterFlush = true;
+                closeState = CloseState.ReadyToClose;
                 Close();
             }
             catch (Exception ex)
@@ -48,7 +50,10 @@ public sealed partial class SettingsWindow : Window
             }
             finally
             {
-                isFlushing = false;
+                if (closeState == CloseState.Saving)
+                {
+                    closeState = CloseState.Open;
+                }
             }
         };
     }
@@ -65,21 +70,22 @@ public sealed partial class SettingsWindow : Window
     {
         var item = e.ClickedItem as ListViewItem
             ?? (e.ClickedItem as FrameworkElement)?.FindParent<ListViewItem>();
-        if (item?.Tag is string page)
+        if (item?.Tag is string tag)
         {
-            NavigateToPage(page);
+            NavigateToPage(SettingsTabs.Parse(tag));
         }
     }
 
-    public void NavigateToPage(string page)
+    public void NavigateToPage(SettingsTab page)
     {
-        (Type pageType, int index) = page.ToLowerInvariant() switch
+        (Type pageType, int index) = page switch
         {
-            "about" => (typeof(Views.AboutPage), -1),
-            "rulesets" => (typeof(Views.RulesetPage), 1),
-            "quickview" => (typeof(Views.QuickViewPage), 2),
-            "settings" => (typeof(Views.SettingsPage), 3),
-            _ => (typeof(Views.BrowsersPage), 0)
+            SettingsTab.Browsers => (typeof(Views.BrowsersPage), 0),
+            SettingsTab.Rulesets => (typeof(Views.RulesetPage), 1),
+            SettingsTab.QuickView => (typeof(Views.QuickViewPage), 2),
+            SettingsTab.Settings => (typeof(Views.SettingsPage), 3),
+            SettingsTab.About => (typeof(Views.AboutPage), -1),
+            _ => throw new ArgumentOutOfRangeException(nameof(page), page, null)
         };
 
         if (NavigationFrame.CurrentSourcePageType != pageType)

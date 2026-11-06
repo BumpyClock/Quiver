@@ -227,7 +227,7 @@ public partial class App : Microsoft.UI.Xaml.Application
 
 
         _selectorWindow ??= new SelectorWindow();
-        trayService ??= new TrayService(ShowSelector, () => ShowSettings("settings"), ReloadApp, ExitApp);
+        trayService ??= new TrayService(ShowSelector, () => ShowSettings(SettingsTab.Settings), ReloadApp, ExitApp);
         _selectorWindow.Init(cliArgs);
     }
 
@@ -320,7 +320,7 @@ public partial class App : Microsoft.UI.Xaml.Application
         }
     }
 
-    public static void ShowSettings(string page = "browsers")
+    public static void ShowSettings(SettingsTab page)
     {
         CancelActivation();
         _selectorWindow?.MinimizeWindow();

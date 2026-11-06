@@ -12,7 +12,7 @@ public abstract record CliArgs
 {
     private CliArgs() { }
 
-    public sealed record OpenSettings(string Page) : CliArgs;
+    public sealed record OpenSettings(SettingsTab Page) : CliArgs;
     public sealed record Minimized : CliArgs;
     public sealed record OpenUrl(string Url) : CliArgs;
     public sealed record Empty : CliArgs;
@@ -39,7 +39,7 @@ public abstract record CliArgs
         string? page = parseResult.GetValue(PageOption);
         if (parseResult.GetValue(SettingsOption) || page is not null)
         {
-            return new OpenSettings(string.IsNullOrWhiteSpace(page) ? "browsers" : page);
+            return new OpenSettings(SettingsTabs.Parse(page ?? string.Empty));
         }
 
         string[] values = parseResult.GetValue(ValuesArgument) ?? [];
