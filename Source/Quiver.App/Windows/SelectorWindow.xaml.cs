@@ -89,9 +89,9 @@ public sealed partial class SelectorWindow : Window
 
     public void Init(CliArgs args)
     {
-        ViewModel.Url = args.Url;
+        ViewModel.Url = (args as CliArgs.OpenUrl)?.Url ?? string.Empty;
 
-        if (args.IsRunAsMin)
+        if (args is CliArgs.Minimized)
         {
             MinimizeWindow();
             return;
