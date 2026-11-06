@@ -36,14 +36,14 @@ public abstract record CliArgs
     private static CliArgs Parse(ParseResult parseResult)
     {
         bool minimized = parseResult.GetValue(MinimizedOption);
-        string? page = parseResult.GetValue(PageOption);
+        string? page = ValueOrNull(parseResult, PageOption);
         if (parseResult.GetValue(SettingsOption) || page is not null)
         {
             return new OpenSettings(SettingsTabs.Parse(page ?? string.Empty));
         }
 
         string[] values = parseResult.GetValue(ValuesArgument) ?? [];
-        string? uriValue = parseResult.GetValue(UriOption);
+        string? uriValue = ValueOrNull(parseResult, UriOption);
 
         if (minimized)
         {
@@ -58,6 +58,19 @@ public abstract record CliArgs
         int first = values.Length > 0
             && string.Equals(values[0], Environment.ProcessPath ?? string.Empty, StringComparison.OrdinalIgnoreCase) ? 1 : 0;
         return values.Length > first ? ToOpenUrl(values[first]) : new Empty();
+    }
+
+    // An option given without its value (for example a bare "--uri") is a parse error, and GetValue throws on it.
+    private static string? ValueOrNull(ParseResult parseResult, Option<string?> option)
+    {
+        try
+        {
+            return parseResult.GetValue(option);
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     private static OpenUrl ToOpenUrl(string value)
