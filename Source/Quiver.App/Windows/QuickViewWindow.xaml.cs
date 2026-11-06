@@ -27,9 +27,15 @@ public sealed partial class QuickViewWindow : Window
     private readonly QuickViewSettings quickViewSettings;
     private readonly IWebViewEnvironmentService webViewEnvironmentService;
     private readonly WebView2 quickWebView;
-    private bool isWebViewInitialized;
-    private bool isClosed;
-    private Uri? pendingNavigationUri;
+    private WebViewState state = new WebViewState.Initializing(PendingUri: null);
+
+    private abstract record WebViewState
+    {
+        public sealed record Initializing(Uri? PendingUri) : WebViewState;
+        public sealed record Ready : WebViewState;
+        public sealed record Failed : WebViewState;
+        public sealed record Closed : WebViewState;
+    }
 
     public QuickViewWindow(
         string url,
@@ -63,9 +69,7 @@ public sealed partial class QuickViewWindow : Window
     #region Lifecycle Events
     private void QuickViewWindow_Closed(object sender, WindowEventArgs args)
     {
-        isClosed = true;
-        isWebViewInitialized = false;
-        pendingNavigationUri = null;
+        state = new WebViewState.Closed();
         ToolbarBorder.Loaded -= ToolbarBorder_Loaded;
 
         if (quickWebView.CoreWebView2 is not null)
@@ -100,27 +104,45 @@ public sealed partial class QuickViewWindow : Window
         try
         {
             CoreWebView2Environment environment = await webViewEnvironmentService.GetEnvironmentAsync();
-            if (isClosed) return;
+            if (state is not WebViewState.Initializing) return;
             await quickWebView.EnsureCoreWebView2Async(environment);
-            if (isClosed)
-            {
-                quickWebView.Close();
-                return;
-            }
-
-            isWebViewInitialized = true;
-            if (pendingNavigationUri is not null)
-            {
-                Uri uri = pendingNavigationUri;
-                pendingNavigationUri = null;
-                Navigate(uri.AbsoluteUri);
-            }
         }
         catch (Exception ex)
         {
-            Debug.WriteLine(ex);
-            if (!isClosed) SetLoading(false);
+            ShowStartupFailure(ex);
+            return;
         }
+
+        switch (state)
+        {
+            case WebViewState.Closed:
+                quickWebView.Close();
+                break;
+            case WebViewState.Initializing { PendingUri: var pendingUri }:
+                state = new WebViewState.Ready();
+                if (pendingUri is null)
+                {
+                    SetLoading(false);
+                }
+                else
+                {
+                    Navigate(pendingUri.AbsoluteUri);
+                }
+                break;
+        }
+    }
+
+    // CoreWebView2Initialized and EnsureCoreWebView2Async can both report the same failure.
+    private void ShowStartupFailure(Exception exception)
+    {
+        Debug.WriteLine(exception);
+        if (state is not WebViewState.Initializing) return;
+
+        state = new WebViewState.Failed();
+        SetLoading(false);
+        quickWebView.Visibility = Visibility.Collapsed;
+        StartupErrorDetailsText.Text = exception.Message;
+        StartupErrorPanel.Visibility = Visibility.Visible;
     }
 
     private void ConfigureOpenInFlyout()
@@ -180,12 +202,10 @@ public sealed partial class QuickViewWindow : Window
 
     private void RefreshButton_Click(object sender, RoutedEventArgs e)
     {
-        if (!isWebViewInitialized)
+        if (state is WebViewState.Ready)
         {
-            return;
+            quickWebView.Reload();
         }
-
-        quickWebView.Reload();
     }
 
     private void AddressTextBox_KeyDown(object sender, KeyRoutedEventArgs e)
@@ -203,11 +223,10 @@ public sealed partial class QuickViewWindow : Window
     #region WebView Event Handlers
     private void QuickWebView_CoreWebView2Initialized(WebView2 sender, CoreWebView2InitializedEventArgs args)
     {
-        if (isClosed) return;
+        if (state is WebViewState.Closed) return;
         if (args.Exception is not null)
         {
-            Debug.WriteLine(args.Exception);
-            SetLoading(false);
+            ShowStartupFailure(args.Exception);
             return;
         }
 
@@ -248,20 +267,22 @@ public sealed partial class QuickViewWindow : Window
 
     private void Navigate(string? url)
     {
-        if (isClosed) return;
+        if (state is WebViewState.Closed) return;
         if (!TryCreateQuickViewUri(url, out var uri))
         {
             return;
         }
 
         AddressTextBox.Text = uri.AbsoluteUri;
-        if (!isWebViewInitialized)
+        switch (state)
         {
-            pendingNavigationUri = uri;
-            return;
+            case WebViewState.Initializing:
+                state = new WebViewState.Initializing(uri);
+                break;
+            case WebViewState.Ready:
+                quickWebView.Source = uri;
+                break;
         }
-
-        quickWebView.Source = uri;
     }
 
     private string GetCurrentUrl()

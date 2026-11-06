@@ -58,6 +58,7 @@ internal sealed class SmokeApplication : Application
         {
             renderingWindow = new Window();
             await RenderingChecks.CheckBackdropLayerAsync(renderingWindow);
+            await QuickViewStartupChecks.CheckEnvironmentRetryAsync();
 
             using (var image = new Bitmap(1024, 512))
             {

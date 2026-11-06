@@ -8,13 +8,31 @@ using System.Threading.Tasks;
 
 namespace Quiver.App.Services;
 
-public class WebViewEnvironmentService(ISettingsService settingsService) : IWebViewEnvironmentService
+public class WebViewEnvironmentService : IWebViewEnvironmentService
 {
-    private readonly Lazy<Task<CoreWebView2Environment>> environmentTask = new(() => CreateEnvironmentAsync(settingsService));
+    private readonly Func<Task<CoreWebView2Environment>> createEnvironment;
+    private Task<CoreWebView2Environment>? environmentTask;
 
+    public WebViewEnvironmentService(ISettingsService settingsService)
+        : this(() => CreateEnvironmentAsync(settingsService))
+    {
+    }
+
+    internal WebViewEnvironmentService(Func<Task<CoreWebView2Environment>> createEnvironment)
+    {
+        this.createEnvironment = createEnvironment;
+    }
+
+    // Callers run on the UI thread, so a plain field shares one in-flight creation without locking.
+    // A faulted or canceled creation is replaced so a later Quick View window can retry.
     public Task<CoreWebView2Environment> GetEnvironmentAsync()
     {
-        return environmentTask.Value;
+        if (environmentTask is null || environmentTask.IsFaulted || environmentTask.IsCanceled)
+        {
+            environmentTask = createEnvironment();
+        }
+
+        return environmentTask;
     }
 
     private static async Task<CoreWebView2Environment> CreateEnvironmentAsync(ISettingsService settingsService)
