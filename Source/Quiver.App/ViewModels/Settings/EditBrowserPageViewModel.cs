@@ -45,7 +45,7 @@ namespace Quiver.App.ViewModels
         private readonly ISettingsService settingsService;
         private readonly IIconLoader iconLoader;
         private bool suppressPreviewRefresh;
-        private int previewVersion;
+        // The current preview request; null when none is running. A load may write only while it is still this one.
         private CancellationTokenSource? iconPreviewCancellation;
 
         // Tracks the current refresh so callers can await preview initialization or updates.
@@ -72,19 +72,18 @@ namespace Quiver.App.ViewModels
                 var cancellation = new CancellationTokenSource();
                 iconPreviewCancellation?.Cancel();
                 iconPreviewCancellation = cancellation;
-                int version = ++previewVersion;
-                IconPreviewLoadTask = LoadIconPreviewAsync(version, cancellation);
+                IconPreviewLoadTask = LoadIconPreviewAsync(cancellation);
             }
         }
 
-        private async Task LoadIconPreviewAsync(int version, CancellationTokenSource cancellation)
+        private async Task LoadIconPreviewAsync(CancellationTokenSource cancellation)
         {
             try
             {
                 var image = await iconLoader.LoadIconAsync(
                     new Browser { ExePath = ExePath, Icon = Icon },
                     cancellation.Token);
-                if (version == previewVersion) IconPreview = image;
+                if (ReferenceEquals(iconPreviewCancellation, cancellation)) IconPreview = image;
             }
             catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
             {
@@ -92,7 +91,7 @@ namespace Quiver.App.ViewModels
             catch (Exception ex)
             {
                 Debug.WriteLine($"Could not refresh browser icon preview: {ex.Message}");
-                if (version == previewVersion) IconPreview = null;
+                if (ReferenceEquals(iconPreviewCancellation, cancellation)) IconPreview = null;
             }
             finally
             {
@@ -106,7 +105,6 @@ namespace Quiver.App.ViewModels
 
         public void CancelIconPreviewLoad()
         {
-            previewVersion++;
             var cancellation = iconPreviewCancellation;
             iconPreviewCancellation = null;
             cancellation?.Cancel();
