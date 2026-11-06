@@ -10,6 +10,7 @@ internal static class IconConsumerChecks
     public static async Task RunAsync()
     {
         await CheckBrowsersPageSchedulerAsync();
+        await CheckEditPreviewLatestWinsAsync();
     }
 
     private static async Task CheckBrowsersPageSchedulerAsync()
@@ -60,6 +61,45 @@ internal static class IconConsumerChecks
         removalPage.Browsers.Remove(removed);
         Check(removalLoader.Requests[0].Token.IsCancellationRequested && removed.Icon is null,
             "removing a realized item cancels its load");
+    }
+
+    private static async Task CheckEditPreviewLatestWinsAsync()
+    {
+        var loader = new ControlledIconLoader();
+        var settings = new SettingsStub(new Settings { Browsers = [new Browser("Edit", "edit.exe")] });
+        var editor = new EditBrowserPageViewModel(settings.LoadSettings().Browsers[0], settings, loader);
+        var older = new BitmapImage();
+        var newer = new BitmapImage();
+
+        editor.ExePath = "other.exe";
+        Check(loader.Requests.Count == 2, "changing the path starts a new preview request");
+        loader.Requests[1].Complete(newer);
+        await editor.IconPreviewLoadTask;
+        loader.Requests[0].Complete(older);
+        await Task.Yield();
+        Check(ReferenceEquals(editor.IconPreview, newer), "older preview never overwrites newer");
+
+        editor.ExePath = "third.exe";
+        editor.CancelIconPreviewLoad();
+        loader.Requests[2].Complete(older);
+        await Task.Yield();
+        Check(ReferenceEquals(editor.IconPreview, newer), "canceled preview load does not write");
+
+        editor.ExePath = "fourth.exe";
+        var applied = new BitmapImage();
+        editor.ApplyIcon(new BrowserIcon(), applied);
+        loader.Requests[3].Complete(older);
+        await Task.Yield();
+        Check(ReferenceEquals(editor.IconPreview, applied), "applied icon is not overwritten by an older load");
+
+        editor.ExePath = "fifth.exe";
+        editor.ExePath = "sixth.exe";
+        loader.Requests[4].Fail(new InvalidOperationException("stale"));
+        await Task.Yield();
+        Check(ReferenceEquals(editor.IconPreview, applied), "stale preview failure does not clear the preview");
+        loader.Requests[5].Fail(new InvalidOperationException("current"));
+        await editor.IconPreviewLoadTask;
+        Check(editor.IconPreview is null, "current preview failure clears the preview");
     }
 
     private static void Check(bool condition, string caseName)
