@@ -32,16 +32,26 @@ public partial class IconLoaderService : IIconLoader
     private static readonly TimeSpan MaxCacheAge = TimeSpan.FromDays(30);
     private static readonly HttpClient HttpClient = new() { Timeout = TimeSpan.FromSeconds(10) };
     private readonly string cacheDirectory;
+    // Only Loading requests are deduplicated here.
     private readonly Dictionary<string, PendingIconLoad> pending = [];
-    // Abandoned requests leave deduplication before their cache work has finished.
+    // Loading and Abandoned requests; abandoned cache work still has to finish before a drain returns.
     private readonly HashSet<PendingIconLoad> activeLoads = [];
     private readonly Dictionary<string, LinkedListNode<(string Key, BitmapImage Image, DateTime LoadedAt)>> decoded = [];
     private readonly LinkedList<(string Key, BitmapImage Image, DateTime LoadedAt)> decodedOrder = [];
     private readonly object sync = new();
     private Task diskMaintenanceTask = Task.CompletedTask;
-    private bool diskMaintenanceRunning;
-    private bool diskMaintenanceRequested;
+    private DiskMaintenanceState diskMaintenance;
     private bool stopping;
+
+    private enum DiskMaintenanceState { Idle, Running, RerunRequested }
+
+    private enum IconLoadState
+    {
+        Loading,
+        /// <summary>No caller wants the result; the load is canceled and its image is neither cached nor returned.</summary>
+        Abandoned,
+        Completed,
+    }
 
     private sealed class PendingIconLoad
     {
@@ -49,7 +59,7 @@ public partial class IconLoaderService : IIconLoader
         public TaskCompletionSource<BitmapImage?> Completion { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
         public int Waiters { get; set; } = 1;
-        public bool Abandoned { get; set; }
+        public IconLoadState State { get; set; }
     }
 
     public IconLoaderService(string? cacheDirectory = null)
@@ -256,11 +266,10 @@ public partial class IconLoaderService : IIconLoader
             bool cancel = false;
             lock (sync)
             {
-                if (--request.Waiters == 0 && !request.Completion.Task.IsCompleted)
+                if (--request.Waiters == 0 && request.State == IconLoadState.Loading)
                 {
-                    request.Abandoned = true;
-                    if (pending.TryGetValue(key, out var current) && ReferenceEquals(current, request))
-                        pending.Remove(key);
+                    request.State = IconLoadState.Abandoned;
+                    pending.Remove(key);
                     cancel = true;
                 }
             }
@@ -316,7 +325,7 @@ public partial class IconLoaderService : IIconLoader
 
             lock (sync)
             {
-                if (!request.Abandoned && !token.IsCancellationRequested)
+                if (request.State == IconLoadState.Loading && !token.IsCancellationRequested)
                 {
                     var node = decodedOrder.AddFirst((key, image, fetchedAt));
                     decoded.Add(key, node);
@@ -343,10 +352,11 @@ public partial class IconLoaderService : IIconLoader
             bytes?.Dispose();
             lock (sync)
             {
-                if (pending.TryGetValue(key, out var current) && ReferenceEquals(current, request))
-                    pending.Remove(key);
+                bool abandoned = request.State == IconLoadState.Abandoned;
+                if (!abandoned) pending.Remove(key);
                 activeLoads.Remove(request);
-                request.Completion.SetResult(request.Abandoned ? null : image);
+                request.State = IconLoadState.Completed;
+                request.Completion.SetResult(abandoned ? null : image);
             }
         }
     }
@@ -465,9 +475,12 @@ public partial class IconLoaderService : IIconLoader
     {
         lock (sync)
         {
-            diskMaintenanceRequested = true;
-            if (diskMaintenanceRunning) return;
-            diskMaintenanceRunning = true;
+            if (diskMaintenance != DiskMaintenanceState.Idle)
+            {
+                diskMaintenance = DiskMaintenanceState.RerunRequested;
+                return;
+            }
+            diskMaintenance = DiskMaintenanceState.Running;
             diskMaintenanceTask = Task.Run(MaintainDiskCacheAsync);
         }
     }
@@ -495,7 +508,7 @@ public partial class IconLoaderService : IIconLoader
         {
             stopping = true;
             loads = activeLoads.ToArray();
-            foreach (var load in loads) load.Abandoned = true;
+            foreach (var load in loads) load.State = IconLoadState.Abandoned;
             pending.Clear();
         }
         foreach (var load in loads)
@@ -512,12 +525,12 @@ public partial class IconLoaderService : IIconLoader
         {
             // One scan covers a burst of icon writes; no image waits for maintenance.
             await Task.Delay(100).ConfigureAwait(false);
-            lock (sync) diskMaintenanceRequested = false;
+            lock (sync) diskMaintenance = DiskMaintenanceState.Running;
             TrimDiskCache();
             lock (sync)
             {
-                if (diskMaintenanceRequested) continue;
-                diskMaintenanceRunning = false;
+                if (diskMaintenance == DiskMaintenanceState.RerunRequested) continue;
+                diskMaintenance = DiskMaintenanceState.Idle;
                 return;
             }
         }
