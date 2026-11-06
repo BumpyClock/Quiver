@@ -3,6 +3,7 @@ using Quiver.App.Services.Interfaces;
 using Quiver.Library.Models;
 using Microsoft.UI.Xaml.Media.Imaging;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
@@ -15,7 +16,12 @@ public sealed record BrowserIconChoice(BrowserIcon Icon, BitmapImage Image, stri
 
 public partial class BrowserIconDialogViewModel : ObservableObject
 {
+    // Every load starts from Idle and returns to it, so at most one load runs and any load blocks input.
+    // Closed is terminal: work that finishes after Close is discarded.
+    private enum DialogState { NotOpened, Idle, LoadingExecutable, LoadingExecutablePage, LoadingImage, Closed }
+
     private const int ExeIconBatchSize = 16;
+    private const string NoExeIconsMessage = "No icons found. Check the executable path, or choose a local image or URL.";
     private readonly IIconLoader iconLoader;
     private readonly CancellationTokenSource closed = new();
     private readonly string exePath;
@@ -23,15 +29,17 @@ public partial class BrowserIconDialogViewModel : ObservableObject
     private readonly string? originalLocalPath;
     private BrowserIconChoice? localChoice;
     private BrowserIconChoice? urlChoice;
-    private bool executableIconsLoaded;
-    private bool isClosed;
-    private int executableIconCount;
+    private int? executableIconCount;
     private int executablePageStart;
     private BrowserIconChoice? originalExeChoice;
     private BrowserIconChoice? selectedExeChoice;
-    private bool changingExecutablePage;
 
     public ObservableCollection<BrowserIconChoice> ExeIcons { get; } = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsOpen), nameof(IsBusy), nameof(IsLoadingExeIcons), nameof(CanInteract),
+        nameof(CanSave), nameof(ShowEmptyState), nameof(CanLoadMoreExeIcons), nameof(CanLoadPreviousExeIcons))]
+    private partial DialogState State { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasPreview))]
@@ -42,7 +50,7 @@ public partial class BrowserIconDialogViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(CanSave))]
     [NotifyPropertyChangedFor(nameof(HasPreview))]
     [NotifyPropertyChangedFor(nameof(ShowEmptyState))]
-    public partial BrowserIconChoice? Selection { get; set; }
+    public partial BrowserIconChoice? Selection { get; private set; }
 
     [ObservableProperty]
     public partial BrowserIconChoice? SelectedExeIcon { get; set; }
@@ -51,29 +59,22 @@ public partial class BrowserIconDialogViewModel : ObservableObject
     public partial string UrlText { get; set; } = string.Empty;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanSave))]
-    [NotifyPropertyChangedFor(nameof(CanInteract))]
-    [NotifyPropertyChangedFor(nameof(ShowEmptyState))]
-    public partial bool IsBusy { get; set; }
-
-    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasError))]
     public partial string ErrorMessage { get; set; } = string.Empty;
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanLoadMoreExeIcons))]
-    [NotifyPropertyChangedFor(nameof(CanLoadPreviousExeIcons))]
-    public partial bool IsLoadingExeIcons { get; set; }
-
-    public bool CanSave => !IsBusy && Selection is not null;
-    public bool CanInteract => !IsBusy;
+    public bool IsOpen => State is not (DialogState.NotOpened or DialogState.Closed);
+    public bool IsBusy => State is DialogState.LoadingExecutable or DialogState.LoadingImage;
+    public bool IsLoadingExeIcons => State == DialogState.LoadingExecutablePage;
+    // NotOpened counts as interactive so controls do not render disabled while the dialog animates in.
+    public bool CanInteract => State is DialogState.NotOpened or DialogState.Idle;
+    public bool CanSave => CanInteract && Selection is not null;
     public bool HasError => !string.IsNullOrEmpty(ErrorMessage);
     public bool HasPreview => SelectedSource != BrowserIconSource.Executable && Selection is not null;
     public bool ShowEmptyState => SelectedSource != BrowserIconSource.Executable && Selection is null && !IsBusy;
-    public bool HasMoreExeIcons => executablePageStart + ExeIconBatchSize < executableIconCount;
+    public bool HasMoreExeIcons => executablePageStart + ExeIconBatchSize < (executableIconCount ?? 0);
     public bool HasPreviousExeIcons => executablePageStart > 0;
-    public bool CanLoadMoreExeIcons => !IsLoadingExeIcons && HasMoreExeIcons && !isClosed;
-    public bool CanLoadPreviousExeIcons => !IsLoadingExeIcons && HasPreviousExeIcons && !isClosed;
+    public bool CanLoadMoreExeIcons => State == DialogState.Idle && HasMoreExeIcons;
+    public bool CanLoadPreviousExeIcons => State == DialogState.Idle && HasPreviousExeIcons;
     public bool HasSelectedExeIcon => selectedExeChoice is not null;
     public string SelectedExeLabel => selectedExeChoice is null ? string.Empty : $"Selected: {selectedExeChoice.Name}";
 
@@ -97,45 +98,41 @@ public partial class BrowserIconDialogViewModel : ObservableObject
     partial void OnSelectedSourceChanged(BrowserIconSource value)
     {
         ErrorMessage = string.Empty;
-        Selection = value switch
-        {
-            BrowserIconSource.Executable => selectedExeChoice,
-            BrowserIconSource.LocalImage => localChoice,
-            BrowserIconSource.Url => urlChoice,
-            _ => null
-        };
+        RefreshSelection();
     }
 
     partial void OnSelectedExeIconChanged(BrowserIconChoice? value)
     {
-        if (changingExecutablePage || value is null) return;
-        selectedExeChoice = value;
-        if (SelectedSource == BrowserIconSource.Executable) Selection = value;
-        OnPropertyChanged(nameof(HasSelectedExeIcon));
-        OnPropertyChanged(nameof(SelectedExeLabel));
+        // Only idle changes are user picks; during a load the GridView echoes page resets through this binding.
+        if (State != DialogState.Idle || value is null) return;
+        SetSelectedExeChoice(value);
     }
 
     partial void OnUrlTextChanged(string value)
     {
         urlChoice = null;
-        if (SelectedSource == BrowserIconSource.Url)
-        {
-            Selection = null;
-            ErrorMessage = string.Empty;
-        }
+        if (SelectedSource == BrowserIconSource.Url) ErrorMessage = string.Empty;
+        RefreshSelection();
+    }
+
+    public Task OpenAsync()
+    {
+        if (State != DialogState.NotOpened) return Task.CompletedTask;
+        State = DialogState.Idle;
+        return SelectSourceAsync(SelectedSource);
     }
 
     public async Task SelectSourceAsync(BrowserIconSource source)
     {
-        if (IsBusy || isClosed) return;
+        if (State != DialogState.Idle) return;
         SelectedSource = source;
         switch (source)
         {
             case BrowserIconSource.Executable:
-                if (!executableIconsLoaded)
+                if (executableIconCount is null)
                     await LoadExecutableIconsAsync();
                 else if (selectedExeChoice is null)
-                    ErrorMessage = "No icons found. Check the executable path, or choose a local image or URL.";
+                    ErrorMessage = NoExeIconsMessage;
                 break;
             case BrowserIconSource.LocalImage when localChoice is null && originalLocalPath is not null:
                 await LoadLocalImageAsync(originalLocalPath);
@@ -148,38 +145,28 @@ public partial class BrowserIconDialogViewModel : ObservableObject
 
     private async Task LoadExecutableIconsAsync()
     {
-        IsBusy = true;
+        if (!TryBegin(DialogState.LoadingExecutable)) return;
         ErrorMessage = string.Empty;
         try
         {
-            executableIconCount = await iconLoader.GetExeIconCountAsync(exePath, closed.Token);
-            if (isClosed) return;
-            if (originalIconIndex >= ExeIconBatchSize && originalIconIndex < executableIconCount)
-            {
-                originalExeChoice = await CreateExecutableChoiceAsync(originalIconIndex);
-                if (isClosed) return;
-                if (originalExeChoice is not null)
-                {
-                    selectedExeChoice = originalExeChoice;
-                    if (SelectedSource == BrowserIconSource.Executable) Selection = originalExeChoice;
-                    OnPropertyChanged(nameof(HasSelectedExeIcon));
-                    OnPropertyChanged(nameof(SelectedExeLabel));
-                }
-            }
-            OnPropertyChanged(nameof(HasMoreExeIcons));
-            OnPropertyChanged(nameof(CanLoadMoreExeIcons));
-            executableIconsLoaded = true;
-            await LoadExecutablePageAsync(0);
-            if (isClosed) return;
-            if (selectedExeChoice is null)
-                ErrorMessage = "No icons found. Check the executable path, or choose a local image or URL.";
+            int count = await iconLoader.GetExeIconCountAsync(exePath, closed.Token);
+            var original = originalIconIndex >= ExeIconBatchSize && originalIconIndex < count
+                ? await CreateExecutableChoiceAsync(originalIconIndex)
+                : null;
+            var page = await FetchExecutablePageAsync(0, count, original);
+            if (State == DialogState.Closed) return;
+            executableIconCount = count;
+            originalExeChoice = original;
+            if (original is not null) SetSelectedExeChoice(original);
+            ShowExecutablePage(0, page);
+            if (selectedExeChoice is null) ErrorMessage = NoExeIconsMessage;
         }
-        catch (OperationCanceledException) when (isClosed)
+        catch (OperationCanceledException) when (State == DialogState.Closed)
         {
         }
         finally
         {
-            if (!isClosed) IsBusy = false;
+            Finish();
         }
     }
 
@@ -191,53 +178,51 @@ public partial class BrowserIconDialogViewModel : ObservableObject
 
     private async Task LoadExecutablePageAsync(int pageStart)
     {
-        if (IsLoadingExeIcons || isClosed || pageStart < 0 || pageStart >= executableIconCount) return;
-        IsLoadingExeIcons = true;
+        if (executableIconCount is not int count || pageStart < 0 || pageStart >= count) return;
+        if (!TryBegin(DialogState.LoadingExecutablePage)) return;
         try
         {
-            int end = Math.Min(pageStart + ExeIconBatchSize, executableIconCount);
-            var choices = await Task.WhenAll(Enumerable.Range(pageStart, end - pageStart).Select(index =>
-                index == originalIconIndex && originalExeChoice is not null
-                    ? Task.FromResult<BrowserIconChoice?>(originalExeChoice)
-                    : CreateExecutableChoiceAsync(index)));
-            if (isClosed) return;
-            var page = choices.OfType<BrowserIconChoice>().ToList();
-
-            changingExecutablePage = true;
-            try
-            {
-                ExeIcons.Clear();
-                foreach (var choice in page) ExeIcons.Add(choice);
-                executablePageStart = pageStart;
-                if (selectedExeChoice is null)
-                {
-                    selectedExeChoice = page.FirstOrDefault(choice => choice.Icon.Index == originalIconIndex)
-                        ?? page.FirstOrDefault();
-                    if (SelectedSource == BrowserIconSource.Executable) Selection = selectedExeChoice;
-                    OnPropertyChanged(nameof(HasSelectedExeIcon));
-                    OnPropertyChanged(nameof(SelectedExeLabel));
-                }
-                SelectedExeIcon = page.FirstOrDefault(choice => choice.Icon.Index == selectedExeChoice?.Icon.Index);
-            }
-            finally
-            {
-                changingExecutablePage = false;
-            }
+            var page = await FetchExecutablePageAsync(pageStart, count, originalExeChoice);
+            if (State == DialogState.Closed) return;
+            ShowExecutablePage(pageStart, page);
         }
-        catch (OperationCanceledException) when (isClosed)
+        catch (OperationCanceledException) when (State == DialogState.Closed)
         {
         }
         finally
         {
-            if (!isClosed)
-            {
-                IsLoadingExeIcons = false;
-                OnPropertyChanged(nameof(HasMoreExeIcons));
-                OnPropertyChanged(nameof(HasPreviousExeIcons));
-                OnPropertyChanged(nameof(CanLoadMoreExeIcons));
-                OnPropertyChanged(nameof(CanLoadPreviousExeIcons));
-            }
+            Finish();
         }
+    }
+
+    private async Task<List<BrowserIconChoice>> FetchExecutablePageAsync(int pageStart, int count, BrowserIconChoice? original)
+    {
+        int end = Math.Min(pageStart + ExeIconBatchSize, count);
+        var choices = await Task.WhenAll(Enumerable.Range(pageStart, end - pageStart).Select(index =>
+            index == original?.Icon.Index
+                ? Task.FromResult<BrowserIconChoice?>(original)
+                : CreateExecutableChoiceAsync(index)));
+        return choices.OfType<BrowserIconChoice>().ToList();
+    }
+
+    private void ShowExecutablePage(int pageStart, List<BrowserIconChoice> page)
+    {
+        ExeIcons.Clear();
+        foreach (var choice in page) ExeIcons.Add(choice);
+        executablePageStart = pageStart;
+        if (selectedExeChoice is null)
+            SetSelectedExeChoice(page.FirstOrDefault(choice => choice.Icon.Index == originalIconIndex) ?? page.FirstOrDefault());
+        SelectedExeIcon = page.FirstOrDefault(choice => choice.Icon.Index == selectedExeChoice?.Icon.Index);
+        OnPropertyChanged(nameof(HasMoreExeIcons));
+        OnPropertyChanged(nameof(HasPreviousExeIcons));
+    }
+
+    private void SetSelectedExeChoice(BrowserIconChoice? choice)
+    {
+        selectedExeChoice = choice;
+        OnPropertyChanged(nameof(HasSelectedExeIcon));
+        OnPropertyChanged(nameof(SelectedExeLabel));
+        RefreshSelection();
     }
 
     private async Task<BrowserIconChoice?> CreateExecutableChoiceAsync(int index)
@@ -252,12 +237,12 @@ public partial class BrowserIconDialogViewModel : ObservableObject
 
     public async Task LoadUrlAsync()
     {
-        if (IsBusy || isClosed) return;
+        if (State != DialogState.Idle) return;
         string url = UrlText.Trim();
         if (!IsWebUrl(url))
         {
-            Selection = null;
             urlChoice = null;
+            RefreshSelection();
             ErrorMessage = "Enter a direct image URL starting with https:// or http://.";
             return;
         }
@@ -266,19 +251,18 @@ public partial class BrowserIconDialogViewModel : ObservableObject
 
     private async Task LoadImageAsync(string source, bool fromUrl)
     {
-        if (IsBusy || isClosed) return;
-        IsBusy = true;
+        if (!TryBegin(DialogState.LoadingImage)) return;
         ErrorMessage = string.Empty;
-        Selection = null;
         if (fromUrl) urlChoice = null;
         else localChoice = null;
+        RefreshSelection();
         try
         {
             var image = fromUrl
                 ? await iconLoader.LoadIconFromURL(source, closed.Token)
                 : await iconLoader.LoadIconFromImage(source, closed.Token);
-            // Ignore work completed after Cancel, or a URL edited while the request was in flight.
-            if (isClosed || (fromUrl && UrlText.Trim() != source)) return;
+            // A URL edited while the request was in flight makes this result stale.
+            if (State == DialogState.Closed || (fromUrl && UrlText.Trim() != source)) return;
             if (image is null)
             {
                 ErrorMessage = fromUrl
@@ -295,22 +279,42 @@ public partial class BrowserIconDialogViewModel : ObservableObject
             }, image, name, Dimensions(image), source);
             if (fromUrl) urlChoice = choice;
             else localChoice = choice;
-            Selection = choice;
+            RefreshSelection();
         }
-        catch (OperationCanceledException) when (isClosed)
+        catch (OperationCanceledException) when (State == DialogState.Closed)
         {
         }
         finally
         {
-            if (!isClosed) IsBusy = false;
+            Finish();
         }
     }
 
     public void Close()
     {
-        isClosed = true;
+        State = DialogState.Closed;
         closed.Cancel();
     }
+
+    private bool TryBegin(DialogState load)
+    {
+        if (State != DialogState.Idle) return false;
+        State = load;
+        return true;
+    }
+
+    private void Finish()
+    {
+        if (State != DialogState.Closed) State = DialogState.Idle;
+    }
+
+    private void RefreshSelection() => Selection = SelectedSource switch
+    {
+        BrowserIconSource.Executable => selectedExeChoice,
+        BrowserIconSource.LocalImage => localChoice,
+        BrowserIconSource.Url => urlChoice,
+        _ => null
+    };
 
     private static bool IsWebUrl(string source) =>
         Uri.TryCreate(source, UriKind.Absolute, out var uri)
