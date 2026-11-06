@@ -145,6 +145,8 @@ internal sealed class SmokeApplication : Application
                 stalledServer.Stop();
             }
 
+            await IconLoaderStateChecks.CheckAsync(fixtureDirectory, fixturePath);
+
             var chooser = new BrowserIconDialogViewModel(new FakeIconLoader(first), "fixture.exe",
                 new BrowserIcon { Source = BrowserIconSource.Executable, Index = 20 });
             await chooser.OpenAsync();
