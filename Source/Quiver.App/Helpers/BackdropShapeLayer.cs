@@ -48,7 +48,7 @@ internal sealed partial class BackdropShapeLayer : IDisposable
     private CompositionBackdropBrush? backdropBrush;
     private CompositionEffectFactory? acrylicFactory;
     private CompositionEffectBrush? acrylicBrush;
-    private bool acrylicUnsupported;
+    private AcrylicSupport acrylicSupport;
     private bool isDark = true;
     private bool disposed;
 
@@ -59,7 +59,7 @@ internal sealed partial class BackdropShapeLayer : IDisposable
         int useHostBackdrop = 1;
         if (DwmSetWindowAttribute(hwnd, DwmaUseHostBackdropBrush, ref useHostBackdrop, sizeof(int)) < 0)
         {
-            acrylicUnsupported = true;
+            acrylicSupport = AcrylicSupport.Unsupported;
         }
 
         dispatcherQueue = DispatcherQueue.GetForCurrentThread();
@@ -198,9 +198,11 @@ internal sealed partial class BackdropShapeLayer : IDisposable
         }
     }
 
+    private enum AcrylicSupport { Unknown, Available, Unsupported }
+
     private CompositionEffectBrush? GetAcrylicBrush()
     {
-        if (acrylicBrush is not null || acrylicUnsupported)
+        if (acrylicSupport != AcrylicSupport.Unknown)
         {
             return acrylicBrush;
         }
@@ -219,12 +221,13 @@ internal sealed partial class BackdropShapeLayer : IDisposable
 
             acrylicBrush = acrylicFactory.CreateBrush();
             acrylicBrush.SetSourceParameter("Backdrop", backdropBrush);
+            acrylicSupport = AcrylicSupport.Available;
             return acrylicBrush;
         }
         catch (Exception ex) when (ex is COMException or NotImplementedException)
         {
             Debug.WriteLine($"Acrylic unavailable (0x{ex.HResult:X8}): {ex.Message}");
-            acrylicUnsupported = true;
+            acrylicSupport = AcrylicSupport.Unsupported;
             return null;
         }
     }
