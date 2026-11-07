@@ -216,6 +216,7 @@ public sealed partial class SelectorWindow : Window
 
     private void ApplyLayout()
     {
+        SelectionOutline.Data = null;
         FlowerHost.Width = metrics.FlowerSize;
         FlowerHost.Height = metrics.FlowerHeight;
         FlowerHost.Margin = new Thickness(0, metrics.FlowerTop, 0, 0);
@@ -394,7 +395,13 @@ public sealed partial class SelectorWindow : Window
     private void Select(int index)
     {
         int count = ViewModel.Browsers.Count;
+        int previousIndex = selectedIndex;
         selectedIndex = count == 0 ? 0 : Math.Clamp(index, 0, count - 1);
+        SelectionOutline.Visibility = count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        if (count > 0 && (SelectionOutline.Data is null || previousIndex != selectedIndex))
+        {
+            SelectionOutline.Data = metrics.SelectionGeometry(selectedIndex);
+        }
         for (int i = 0; i < count; i++)
         {
             if (BrowserRing.TryGetElement(i) is RadialBrowserItem item)
@@ -425,8 +432,8 @@ public sealed partial class SelectorWindow : Window
             : string.IsNullOrEmpty(uri.Host) ? ViewModel.Url
             : uri.Host.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ? uri.Host[4..] : uri.Host;
 
-        PillTitle.Text = ViewModel.Browsers.Count > 0 ? ViewModel.Browsers[selectedIndex].Name : Constants.NAME;
-        PillHost.Text = link;
+        PillTitle.Text = string.IsNullOrEmpty(link) ? "Choose a browser" : link;
+        PillHost.Text = ViewModel.Url;
         PillLock.Visibility = hasUrl && uri!.Scheme == Uri.UriSchemeHttps ? Visibility.Visible : Visibility.Collapsed;
         PillLink.Visibility = string.IsNullOrEmpty(link) ? Visibility.Collapsed : Visibility.Visible;
     }

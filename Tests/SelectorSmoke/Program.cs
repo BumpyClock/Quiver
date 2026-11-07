@@ -74,20 +74,70 @@ public sealed partial class SmokeApplication : Application
             var first = (RadialBrowserItem)ring.GetOrCreateElement(0);
             var second = (RadialBrowserItem)ring.GetOrCreateElement(1);
             root.UpdateLayout();
+            CheckSelectionAlignment();
+            foreach (var item in new[] { first, second })
+            {
+                var tile = (FrameworkElement)item.FindName("IconTile");
+                var badge = (Border)item.FindName("ShortcutBadge");
+                var offset = badge.TransformToVisual(tile).TransformPoint(default);
+                Check(Math.Abs(offset.X + badge.ActualWidth / 2 - tile.ActualWidth / 2) <= 1 / root.XamlRoot.RasterizationScale
+                    && offset.Y >= 0 && offset.Y + badge.ActualHeight <= tile.ActualHeight,
+                    $"shortcut keycaps are centered inside the icon tiles (offset {offset.X},{offset.Y}; "
+                    + $"badge {badge.ActualWidth}x{badge.ActualHeight}; tile {tile.ActualWidth}x{tile.ActualHeight})");
+                var shortcut = (TextBlock)item.FindName("ShortcutText");
+                Check(shortcut.Text == (ring.GetElementIndex(item) + 1).ToString(),
+                    "integrated hints keep the browser's assigned number shortcut");
+            }
+            first.ShortcutNumber = 10;
+            Check(((Border)first.FindName("ShortcutBadge")).Visibility == Visibility.Collapsed,
+                "browsers without a number-key shortcut do not show a keycap");
+            first.ShortcutNumber = 1;
+            foreach (var theme in new[] { ElementTheme.Dark, ElementTheme.Light, ElementTheme.Dark })
+            {
+                root.RequestedTheme = theme;
+                root.UpdateLayout();
+                await Task.Delay(50);
+                var outline = (Microsoft.UI.Xaml.Shapes.Path)root.FindName("SelectionOutline");
+                var hub = (FontIcon)((Button)root.FindName("HubButton")).Content;
+                bool dark = theme == ElementTheme.Dark;
+                Check(IsDark(outline.Fill) == dark && IsDark(outline.Stroke) != dark
+                    && IsDark(hub.Foreground) != dark,
+                    "selection surface, outline, and hub follow live theme changes");
+                foreach (var item in new[] { first, second })
+                {
+                    Check(IsDark(((Border)item.FindName("IconSurface")).Background) == dark
+                        && IsDark(((Border)item.FindName("ShortcutBadge")).Background) == dark
+                        && IsDark(((TextBlock)item.FindName("ShortcutText")).Foreground) != dark
+                        && IsDark(((TextBlock)item.FindName("PetalName")).Foreground) != dark,
+                        "selected and unselected icon tiles, hints, and labels follow live theme changes");
+                }
+            }
+            root.RequestedTheme = ElementTheme.Default;
             var pill = (Button)root.FindName("NamePill");
             var title = (TextBlock)root.FindName("PillTitle");
             var host = (TextBlock)root.FindName("PillHost");
+            const string linkTitle = "a-long-sharepoint-hostname-for-the-selector.example.com";
+            Check(title.Text == linkTitle && host.Text == window.ViewModel.Url,
+                "link card shows the destination host and complete URL instead of the browser name");
+            window.ViewModel.Url = "https://www.example.com/path?q=1#section";
+            Check(title.Text == "example.com" && host.Text == window.ViewModel.Url,
+                "edited links update their host, path, query, and fragment");
+            window.ViewModel.Url = string.Empty;
+            Check(title.Text == "Choose a browser"
+                && ((FrameworkElement)root.FindName("PillLink")).Visibility == Visibility.Collapsed,
+                "opening without a URL shows a useful prompt instead of stale link details");
+            window.ViewModel.Url = "https://" + linkTitle + "/document";
             int focusChanges = 0;
             root.GotFocus += (_, _) => focusChanges++;
             first.FocusItem(FocusState.Keyboard);
             second.FocusItem(FocusState.Keyboard);
-            await CheckSettledAsync(second, "Browser 2");
+            await CheckSettledAsync(second);
             Check(host.ActualWidth > 0 && host.ActualWidth < pill.ActualWidth - 40,
                 "long link hosts stay within the card and leave room for link options");
 
             second.FocusItem(FocusState.Programmatic);
             first.FocusItem(FocusState.Programmatic);
-            await CheckSettledAsync(first, "Browser 1");
+            await CheckSettledAsync(first);
 
             first.FocusItem(FocusState.Keyboard);
             second.FocusItem(FocusState.Keyboard);
@@ -95,17 +145,23 @@ public sealed partial class SmokeApplication : Application
             await Task.Delay(100);
             Check(ReferenceEquals(FocusManager.GetFocusedElement(root.XamlRoot), pill),
                 "stale browser focus notifications do not steal focus from link options");
-            Check(title.Text == "Browser 1", "stale focus does not replace the selected browser label");
+            Check(first.IsSelected && !second.IsSelected, "stale focus does not replace the selected browser");
             int before = focusChanges;
             await Task.Delay(100);
             Check(focusChanges == before, "focus stays on link options without new input");
 
             second.FocusItem(FocusState.Keyboard);
-            await CheckSettledAsync(second, "Browser 2");
+            await CheckSettledAsync(second);
             File.WriteAllText(resultPath, "PASS: selector focus settles and stale notifications cannot change selection.");
             Console.WriteLine(File.ReadAllText(resultPath));
 
-            async Task CheckSettledAsync(RadialBrowserItem item, string name)
+            static bool IsDark(Brush brush)
+            {
+                var color = ((SolidColorBrush)brush).Color;
+                return Math.Max(color.R, Math.Max(color.G, color.B)) < 128;
+            }
+
+            async Task CheckSettledAsync(RadialBrowserItem item)
             {
                 await Task.Delay(100);
                 var focused = FocusManager.GetFocusedElement(root.XamlRoot) as DependencyObject;
@@ -114,11 +170,38 @@ public sealed partial class SmokeApplication : Application
                     focused = VisualTreeHelper.GetParent(focused);
                 }
                 Check(ReferenceEquals(focused, item), "latest browser focus wins");
-                Check(title.Text == name, "selected browser label follows the latest focus");
+                Check(item.IsSelected, "selected browser follows the latest focus");
+                Check(title.Text == linkTitle && host.Text == window.ViewModel.Url,
+                    "browser selection leaves destination details unchanged");
+                CheckSelectionAlignment();
                 int before = focusChanges;
                 await Task.Delay(100);
                 Check(focusChanges == before, "browser focus stays stable without new input");
-                Check(title.Text == name, "selected browser label stays stable without new input");
+                Check(item.IsSelected, "selected browser stays stable without new input");
+            }
+
+            void CheckSelectionAlignment()
+            {
+                var outline = (Microsoft.UI.Xaml.Shapes.Path)root.FindName("SelectionOutline");
+                int selected = first.IsSelected ? 0 : 1;
+                var item = selected == 0 ? first : second;
+                var flower = (FrameworkElement)root.FindName("FlowerHost");
+                var position = item.TransformToVisual(flower).TransformPoint(default);
+                var center = new Windows.Foundation.Point(position.X + item.ActualWidth / 2,
+                    position.Y + item.ActualHeight / 2);
+                var geometry = (PathGeometry)outline.Data;
+                var arc = (ArcSegment)geometry.Figures[0].Segments[0];
+                Check(Math.Abs(arc.Size.Width + outline.StrokeThickness / 2 - item.ActualWidth / 2) < 0.01,
+                    "selection stroke fits exactly within the browser circle");
+                var start = geometry.Figures[0].StartPoint;
+                var end = arc.Point;
+                Check(Math.Abs(Math.Sqrt(Math.Pow(start.X - center.X, 2) + Math.Pow(start.Y - center.Y, 2))
+                    - arc.Size.Width) < 0.01
+                    && Math.Abs(Math.Sqrt(Math.Pow(end.X - center.X, 2) + Math.Pow(end.Y - center.Y, 2))
+                    - arc.Size.Width) < 0.01,
+                    "selection arc is centered on the arranged browser, not a separate focus rectangle");
+                var button = (Button)item.FindName("LaunchButton");
+                Check(!button.UseSystemFocusVisuals, "browser selection owns its aligned keyboard outline");
             }
         }
         catch (Exception error)
@@ -176,6 +259,42 @@ public sealed partial class SmokeApplication : Application
                     && center.X + RadialMetrics.PetalRadius <= metrics.FlowerSize + 0.0001
                     && center.Y + RadialMetrics.PetalRadius <= metrics.FlowerHeight + 0.0001,
                     "every browser petal fits inside its visible host");
+                var figure = metrics.SelectionGeometry(index).Figures[0];
+                var arc = (ArcSegment)figure.Segments[0];
+                Check(Math.Abs(arc.Size.Width - 51) < 0.0001,
+                    "selected petal includes the stroke inside its 52 DIP radius");
+                if (count > 1)
+                {
+                    var hubArc = (ArcSegment)figure.Segments[2];
+                    var hubStart = ((LineSegment)figure.Segments[1]).Point;
+                    var direction = new Windows.Foundation.Point(
+                        (center.X - metrics.FlowerOrigin.X) / metrics.RingRadius,
+                        (center.Y - metrics.FlowerOrigin.Y) / metrics.RingRadius);
+                    Check(arc.IsLargeArc && !hubArc.IsLargeArc,
+                        "selection follows the outer browser arc and the inner hub arc");
+                    Check((figure.StartPoint.X - center.X) * direction.X
+                        + (figure.StartPoint.Y - center.Y) * direction.Y < 0,
+                        "tangents join the inward side of each browser, leaving its outer edge circular");
+                    Check(Math.Abs(Math.Sqrt(Math.Pow(hubStart.X - metrics.FlowerOrigin.X, 2)
+                        + Math.Pow(hubStart.Y - metrics.FlowerOrigin.Y, 2)) - RadialMetrics.HubRadius) < 0.0001,
+                        "all selections join the same central circle");
+                    foreach (var (petalPoint, hubPoint) in new[]
+                    {
+                        (arc.Point, hubStart),
+                        (figure.StartPoint, hubArc.Point)
+                    })
+                    {
+                        double dx = hubPoint.X - petalPoint.X;
+                        double dy = hubPoint.Y - petalPoint.Y;
+                        double length = Math.Sqrt(dx * dx + dy * dy);
+                        Check(length > 0, "selection connectors have nonzero length");
+                        Check(Math.Abs(dx * (petalPoint.X - center.X)
+                            + dy * (petalPoint.Y - center.Y)) / (length * arc.Size.Width) < 0.0001
+                            && Math.Abs(dx * (hubPoint.X - metrics.FlowerOrigin.X)
+                            + dy * (hubPoint.Y - metrics.FlowerOrigin.Y)) / (length * hubArc.Size.Width) < 0.0001,
+                            "both selection connectors are tangent to the petal and hub circles");
+                    }
+                }
             }
         }
     }

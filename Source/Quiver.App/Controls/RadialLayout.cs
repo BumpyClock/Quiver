@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using System;
 using Windows.Foundation;
 
@@ -18,6 +19,7 @@ public readonly record struct RadialMetrics(int Count, double RingRadius, double
     private const double MinPillWidth = 264;
     private const double MaxPillWidth = 320;
     public const double ShadowMargin = 20;
+    public const double HubRadius = 24;
     private const double PairRingRadius = 58;
     private const double PairCenterFillRadius = 27;
     private const double MinRingRadius = 64;
@@ -79,6 +81,57 @@ public readonly record struct RadialMetrics(int Count, double RingRadius, double
     {
         double angle = ItemAngle(index);
         return new Point(origin.X + RingRadius * Math.Cos(angle), origin.Y + RingRadius * Math.Sin(angle));
+    }
+
+    public PathGeometry SelectionGeometry(int index)
+    {
+        double radius = PetalRadius - 1;
+        var center = ItemCenter(index, FlowerOrigin);
+        if (Count <= 1)
+        {
+            var circle = new PathFigure { StartPoint = new Point(center.X, center.Y - radius), IsClosed = true };
+            circle.Segments.Add(new ArcSegment
+            {
+                Point = new Point(center.X, center.Y + radius),
+                Size = new Size(radius, radius),
+                SweepDirection = SweepDirection.Clockwise
+            });
+            circle.Segments.Add(new ArcSegment
+            {
+                Point = circle.StartPoint,
+                Size = new Size(radius, radius),
+                SweepDirection = SweepDirection.Clockwise
+            });
+            return new PathGeometry { Figures = { circle } };
+        }
+
+        double angle = ItemAngle(index);
+        double tangent = Math.Acos((HubRadius - radius) / RingRadius);
+        var upper = new Point(Math.Cos(angle - tangent), Math.Sin(angle - tangent));
+        var lower = new Point(Math.Cos(angle + tangent), Math.Sin(angle + tangent));
+        var figure = new PathFigure
+        {
+            StartPoint = new Point(center.X + radius * upper.X, center.Y + radius * upper.Y),
+            IsClosed = true
+        };
+        figure.Segments.Add(new ArcSegment
+        {
+            Point = new Point(center.X + radius * lower.X, center.Y + radius * lower.Y),
+            Size = new Size(radius, radius),
+            IsLargeArc = true,
+            SweepDirection = SweepDirection.Clockwise
+        });
+        figure.Segments.Add(new LineSegment
+        {
+            Point = new Point(FlowerOrigin.X + HubRadius * lower.X, FlowerOrigin.Y + HubRadius * lower.Y)
+        });
+        figure.Segments.Add(new ArcSegment
+        {
+            Point = new Point(FlowerOrigin.X + HubRadius * upper.X, FlowerOrigin.Y + HubRadius * upper.Y),
+            Size = new Size(HubRadius, HubRadius),
+            SweepDirection = SweepDirection.Clockwise
+        });
+        return new PathGeometry { Figures = { figure } };
     }
 }
 

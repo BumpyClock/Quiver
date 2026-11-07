@@ -21,6 +21,8 @@ internal sealed partial class BackdropShapeLayer : IDisposable
     private static readonly Guid IID_ICompositorDesktopInterop = new("29E691FA-4567-4DCA-B319-D0F207EB6807");
     private static readonly Color DarkAcrylicTintColor = Color.FromArgb(0x99, 0x20, 0x20, 0x20);
     private static readonly Color DarkFallbackColor = Color.FromArgb(0xFF, 0x20, 0x20, 0x20);
+    private static readonly Color LightAcrylicTintColor = Color.FromArgb(0xE8, 0xF4, 0xF5, 0xF7);
+    private static readonly Color LightFallbackColor = Color.FromArgb(0xFF, 0xF4, 0xF5, 0xF7);
     private const float ShadowBlurRadius = 16;
     private const float ShadowOffsetY = 4;
     private static IntPtr dispatcherQueueController;
@@ -150,6 +152,9 @@ internal sealed partial class BackdropShapeLayer : IDisposable
         {
             isDark = dark;
             ApplyShadowTheme();
+            fallbackBrush.Color = isDark ? DarkFallbackColor : LightFallbackColor;
+            acrylicBrush?.Properties.InsertColor("Tint.Color", isDark ? DarkAcrylicTintColor : LightAcrylicTintColor);
+            UpdateMaterial();
         }
     }
 
@@ -212,11 +217,15 @@ internal sealed partial class BackdropShapeLayer : IDisposable
             backdropBrush ??= compositor.CreateHostBackdropBrush();
             if (acrylicFactory is null)
             {
-                using var tint = new ColorSourceEffect { Color = DarkAcrylicTintColor };
+                using var tint = new ColorSourceEffect
+                {
+                    Name = "Tint",
+                    Color = isDark ? DarkAcrylicTintColor : LightAcrylicTintColor
+                };
                 using var tinted = new CompositeEffect { Mode = CanvasComposite.SourceOver };
                 tinted.Sources.Add(new CompositionEffectSourceParameter("Backdrop"));
                 tinted.Sources.Add(tint);
-                acrylicFactory = compositor.CreateEffectFactory(tinted);
+                acrylicFactory = compositor.CreateEffectFactory(tinted, new[] { "Tint.Color" });
             }
 
             acrylicBrush = acrylicFactory.CreateBrush();
