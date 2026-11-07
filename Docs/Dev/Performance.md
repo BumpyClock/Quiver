@@ -28,15 +28,26 @@ Release-note context for the next release:
 - Selector hover and keyboard focus use separate handlers. Delayed focus notifications cannot move
   focus or replace a newer selection, preventing browser highlights from cycling without input.
 - The selector backdrop layer keeps its compositor geometry, brushes, shadow, and animation definitions
-  when the theme changes; only the shadow color and opacity change. Same-size warm opens reuse the last
-  successful native shape. The acrylic backdrop, its effect chain, and the pointer selection outline are
-  removed.
-- The selector uses the ink stamp design. Petals are 104 px on a dark acrylic plate in every Windows theme.
-  Each petal shows its profile or browser name and a numbered shortcut chip. The selected petal fills
-  light. A center button opens link options. The silhouette casts a soft drop shadow that is lighter in
-  the light Windows theme. The plate edge is antialiased instead of following the aliased window region.
-  Clicks within the shadow band no longer reach the window behind the selector. The plate falls back to
-  solid dark gray when Windows transparency effects are off or acrylic is unavailable.
+  when the theme changes. It updates the existing tint and fallback brushes as well as the shadow.
+  Same-size warm opens reuse the last successful native shape.
+- The selector uses a continuous acrylic flower with 104 DIP petals and inset browser icon tiles.
+  The plate, selection surface, icon tiles, keycaps, and their foregrounds follow the Windows light or
+  dark theme through live theme resources. High contrast uses paired system colors, including a highlight
+  background and highlight text for the hub's normal, hovered, and pressed states.
+  Each petal shows its profile or browser name and a
+  numbered keycap inside its icon tile. A single outlined selection joins the active petal to the transparent center
+  button, using the same radial coordinates as the browser layout. Pointer and keyboard selection share
+  this outline instead of a separate rectangular system focus visual. Static tangent bridges slightly widen
+  the acrylic flower's two- and three-browser waists so the complete selection and its stroke stay on the
+  plate. The same endpoints define the plate, its shadow mask, and the shadow-padded native window region.
+  Hovering or changing selection does not reshape the plate. Petal, ring, hub, and window dimensions stay
+  unchanged. Browser hit targets are circular.
+  The bottom link card shows the destination host and full URL, with ellipsis for long addresses and
+  the complete address in its tooltip. Browser selection does not replace the destination details.
+  The silhouette casts a soft drop shadow that is lighter in the light Windows theme. The plate edge is
+  antialiased instead of following the aliased window region. Clicks within the shadow band no longer
+  reach the window behind the selector. With transparency effects off or acrylic unavailable, the plate
+  falls back to solid gray in the matching theme.
 
 ## Additional changes
 
@@ -51,8 +62,8 @@ Release-note context for the next release:
 - Selector updates preserve collection identity and apply individual moves, replacements, additions, and
   removals. Opening and highlighting the selector reuse composition animations and easing functions.
   `BackdropShapeLayer` retains desktop-compositor path geometry, the acrylic effect factory and brush, the
-  shared silhouette mask surface, easing, and animation definitions. `SetTheme` updates only the shadow
-  color and opacity. Temporary Win2D union intermediates and owned resources are disposed. Teardown is
+  shared silhouette mask surface, easing, and animation definitions. `SetTheme` updates the tint,
+  fallback color, and shadow without rebuilding geometry. Temporary Win2D union intermediates and owned resources are disposed. Teardown is
   idempotent.
 - The selector caches the last successful native shape by radial metrics and pixel window dimensions.
   Same-size warm opens reuse that shape. Collection and native-size notifications coalesce into one
@@ -122,7 +133,14 @@ updates, and double disposal.
 `Tests/SelectorSmoke` runs the production selector in an inactive, offscreen window with in-memory
 settings. It checks rapid keyboard and programmatic focus changes, stable browser labels, and delayed
 browser focus notifications after focus has moved to link options. It also checks the ink stamp ring radii
-for two, four, and six browsers, the center disc, and the link options width.
+for two, four, and six browsers, the center disc, and the link options width. Selection checks cover
+both connectors' tangency to the petal and hub, stroke bounds, and alignment with the arranged browser circles.
+Full filled-selection-plus-stroke containment runs against the production Win2D backdrop builder for
+0 through 10 browsers at 100%, 125%, 150%, 175%, 200%, and 300% DPI, covering 330 selections. It allows
+0.05 DIP for curve flattening. Real GDI `PtInRegion` checks sample every half physical pixel along the
+selection and its shadow-padded envelope. Selection ink has no raster tolerance; the outer shadow band
+allows two physical pixels for integer ellipse/polygon scan conversion. Native window-edge clipping remains
+in force. The high-contrast resource check covers all three hub states without changing the desktop theme.
 
 `Tests/RuleMatchSmoke` accepts `--measure` for a local repeated-matching timing and allocation probe. This
 probe measures the matching API, not whole-application latency or memory use.

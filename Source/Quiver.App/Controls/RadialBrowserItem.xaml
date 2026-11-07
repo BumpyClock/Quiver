@@ -12,20 +12,32 @@
     <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.ThemeDictionaries>
-                <ResourceDictionary x:Key="Default">
+                <ResourceDictionary x:Key="Dark">
                     <SolidColorBrush x:Key="PetalForeground" Color="#F7F8FA" />
-                    <SolidColorBrush x:Key="PetalSelectedFill" Color="#E5EDF7" />
-                    <SolidColorBrush x:Key="PetalSelectedForeground" Color="#182432" />
-                    <SolidColorBrush x:Key="PetalShortcutForeground" Color="#DCE3EB" />
-                    <SolidColorBrush x:Key="PetalShortcutSelectedForeground" Color="#24313F" />
-                    <SolidColorBrush x:Key="PetalShortcutFill" Color="#2E343B" />
-                    <SolidColorBrush x:Key="PetalShortcutSelectedFill" Color="#C9D5E3" />
-                    <SolidColorBrush x:Key="PetalPressedFill" Color="#1F182432" />
+                    <SolidColorBrush x:Key="PetalSelectedForeground" Color="#F7F8FA" />
+                    <SolidColorBrush x:Key="PetalShortcutForeground" Color="#F7F8FA" />
+                    <SolidColorBrush x:Key="PetalShortcutSelectedForeground" Color="#F7F8FA" />
+                    <SolidColorBrush x:Key="PetalShortcutFill" Color="#353535" />
+                    <SolidColorBrush x:Key="PetalShortcutSelectedFill" Color="#404854" />
+                    <SolidColorBrush x:Key="PetalPressedFill" Color="#14FFFFFF" />
                     <SolidColorBrush x:Key="PetalInk" Color="#202020" />
+                    <SolidColorBrush x:Key="PetalIconFill" Color="#2C2C2C" />
+                    <SolidColorBrush x:Key="PetalIconStroke" Color="#20FFFFFF" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="PetalForeground" Color="#182432" />
+                    <SolidColorBrush x:Key="PetalSelectedForeground" Color="#182432" />
+                    <SolidColorBrush x:Key="PetalShortcutForeground" Color="#182432" />
+                    <SolidColorBrush x:Key="PetalShortcutSelectedForeground" Color="#182432" />
+                    <SolidColorBrush x:Key="PetalShortcutFill" Color="#EFFFFFFF" />
+                    <SolidColorBrush x:Key="PetalShortcutSelectedFill" Color="#F7FFFFFF" />
+                    <SolidColorBrush x:Key="PetalPressedFill" Color="#14182432" />
+                    <SolidColorBrush x:Key="PetalInk" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="PetalIconFill" Color="#F7FFFFFF" />
+                    <SolidColorBrush x:Key="PetalIconStroke" Color="#18000000" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="HighContrast">
                     <SolidColorBrush x:Key="PetalForeground" Color="{ThemeResource SystemColorWindowTextColor}" />
-                    <SolidColorBrush x:Key="PetalSelectedFill" Color="{ThemeResource SystemColorHighlightColor}" />
                     <SolidColorBrush x:Key="PetalSelectedForeground" Color="{ThemeResource SystemColorHighlightTextColor}" />
                     <SolidColorBrush x:Key="PetalShortcutForeground" Color="{ThemeResource SystemColorWindowTextColor}" />
                     <SolidColorBrush x:Key="PetalShortcutSelectedForeground" Color="{ThemeResource SystemColorHighlightTextColor}" />
@@ -33,6 +45,8 @@
                     <SolidColorBrush x:Key="PetalShortcutSelectedFill" Color="{ThemeResource SystemColorHighlightColor}" />
                     <SolidColorBrush x:Key="PetalPressedFill" Color="{ThemeResource SystemColorHighlightColor}" />
                     <SolidColorBrush x:Key="PetalInk" Color="{ThemeResource SystemColorWindowColor}" />
+                    <SolidColorBrush x:Key="PetalIconFill" Color="{ThemeResource SystemColorWindowColor}" />
+                    <SolidColorBrush x:Key="PetalIconStroke" Color="{ThemeResource SystemColorWindowTextColor}" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
         </ResourceDictionary>
@@ -44,7 +58,6 @@
                 <VisualState x:Name="Unselected" />
                 <VisualState x:Name="Selected">
                     <VisualState.Setters>
-                        <Setter Target="SelectionDisc.Opacity" Value="1" />
                         <Setter Target="PetalName.Foreground" Value="{ThemeResource PetalSelectedForeground}" />
                         <Setter Target="ShortcutText.Foreground" Value="{ThemeResource PetalShortcutSelectedForeground}" />
                         <Setter Target="ShortcutBadge.Background" Value="{ThemeResource PetalShortcutSelectedFill}" />
@@ -53,14 +66,10 @@
             </VisualStateGroup>
         </VisualStateManager.VisualStateGroups>
 
-        <Ellipse
-            x:Name="SelectionDisc"
-            Fill="{ThemeResource PetalSelectedFill}"
-            IsHitTestVisible="False"
-            Opacity="0" />
-
         <Button
             x:Name="LaunchButton"
+            MinWidth="0"
+            MinHeight="0"
             Padding="0"
             HorizontalAlignment="Stretch"
             VerticalAlignment="Stretch"
@@ -70,28 +79,63 @@
             BorderThickness="0"
             Click="LaunchButton_Click"
             CornerRadius="52"
+            UseSystemFocusVisuals="False"
             ToolTipService.ToolTip="{x:Bind ToolTipText, Mode=OneWay}">
-            <Button.Resources>
-                <ResourceDictionary>
-                    <StaticResource x:Key="ButtonBackground" ResourceKey="SubtleFillColorTransparentBrush" />
-                    <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="SubtleFillColorTransparentBrush" />
-                    <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="PetalPressedFill" />
-                </ResourceDictionary>
-            </Button.Resources>
+            <Button.Template>
+                <ControlTemplate TargetType="Button">
+                    <Grid>
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Normal" />
+                                <VisualState x:Name="PointerOver" />
+                                <VisualState x:Name="Pressed">
+                                    <VisualState.Setters>
+                                        <Setter Target="PressedDisc.Opacity" Value="1" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Disabled" />
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                        <Ellipse Fill="Transparent" />
+                        <Ellipse
+                            x:Name="PressedDisc"
+                            Fill="{ThemeResource PetalPressedFill}"
+                            IsHitTestVisible="False"
+                            Opacity="0" />
+                        <ContentPresenter
+                            HorizontalContentAlignment="Stretch"
+                            VerticalContentAlignment="Stretch"
+                            Content="{TemplateBinding Content}"
+                            IsHitTestVisible="False" />
+                    </Grid>
+                </ControlTemplate>
+            </Button.Template>
             <Grid>
                 <StackPanel
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
-                    Spacing="7">
+                    Spacing="5">
                     <Grid
-                        Width="44"
-                        Height="44"
+                        x:Name="IconTile"
+                        Width="58"
+                        Height="58"
                         HorizontalAlignment="Center">
-                        <Image x:Name="BrowserIcon" Source="{x:Bind BrowserItem.Icon, Mode=OneWay}" />
+                        <Border
+                            x:Name="IconSurface"
+                            Background="{ThemeResource PetalIconFill}"
+                            BorderBrush="{ThemeResource PetalIconStroke}"
+                            BorderThickness="1"
+                            CornerRadius="16">
+                            <Image
+                                x:Name="BrowserIcon"
+                                Width="44"
+                                Height="44"
+                                Source="{x:Bind BrowserItem.Icon, Mode=OneWay}" />
+                        </Border>
                         <Grid
                             Width="17"
                             Height="17"
-                            Margin="0,0,-5,-3"
+                            Margin="0,0,-3,-2"
                             HorizontalAlignment="Right"
                             VerticalAlignment="Bottom"
                             Visibility="{x:Bind ProfileBadgeVisibility, Mode=OneWay}">
@@ -110,6 +154,28 @@
                             </Ellipse>
                             <Ellipse Stroke="{ThemeResource PetalInk}" StrokeThickness="2" />
                         </Grid>
+                        <Border
+                            x:Name="ShortcutBadge"
+                            Width="24"
+                            Height="20"
+                            Margin="0,0,0,3"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Bottom"
+                            Background="{ThemeResource PetalShortcutFill}"
+                            BorderBrush="{ThemeResource PetalIconStroke}"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            IsHitTestVisible="False"
+                            Visibility="{x:Bind ShortcutVisibility, Mode=OneWay}">
+                            <TextBlock
+                                x:Name="ShortcutText"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                FontSize="11"
+                                FontWeight="SemiBold"
+                                Foreground="{ThemeResource PetalShortcutForeground}"
+                                Text="{x:Bind ShortcutNumber, Mode=OneWay}" />
+                        </Border>
                     </Grid>
                     <TextBlock
                         x:Name="PetalName"
@@ -123,26 +189,6 @@
                         TextTrimming="CharacterEllipsis"
                         TextWrapping="NoWrap" />
                 </StackPanel>
-                <Border
-                    x:Name="ShortcutBadge"
-                    Width="20"
-                    Height="20"
-                    Margin="13,12,0,0"
-                    HorizontalAlignment="Left"
-                    VerticalAlignment="Top"
-                    Background="{ThemeResource PetalShortcutFill}"
-                    CornerRadius="10"
-                    IsHitTestVisible="False"
-                    Visibility="{x:Bind ShortcutVisibility, Mode=OneWay}">
-                    <TextBlock
-                        x:Name="ShortcutText"
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center"
-                        FontSize="11"
-                        FontWeight="SemiBold"
-                        Foreground="{ThemeResource PetalShortcutForeground}"
-                        Text="{x:Bind ShortcutNumber, Mode=OneWay}" />
-                </Border>
             </Grid>
         </Button>
     </Grid>

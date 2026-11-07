@@ -1,7 +1,7 @@
 using Microsoft.UI.Xaml;
+using Quiver.App.Controls;
 using Quiver.App.Helpers;
 using System.Numerics;
-using Windows.Foundation;
 using WinRT.Interop;
 
 namespace Quiver.UiSmoke;
@@ -13,10 +13,8 @@ internal static class RenderingChecks
         using var layer = new BackdropShapeLayer(WindowNative.GetWindowHandle(window));
         for (int index = 0; index < 8; index++)
         {
-            float radius = 40 + index;
-            var shape = new BackdropShape(
-                [(new Vector2(100, 100), radius), (new Vector2(140, 100), radius)],
-                new Rect(60, 180, 160, 48), 12, new Vector2(400, 400));
+            var metrics = RadialMetrics.For(index + 2);
+            var shape = BackdropShape.FromMetrics(metrics, new Vector2((float)metrics.WindowWidth, (float)metrics.WindowHeight));
             layer.SetShape(shape, index % 2 == 0);
             layer.SetTheme(true);
             layer.SetTheme(true);

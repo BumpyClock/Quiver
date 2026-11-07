@@ -14,7 +14,6 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using System;
 using System.Collections.Specialized;
-using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Numerics;
@@ -216,6 +215,7 @@ public sealed partial class SelectorWindow : Window
 
     private void ApplyLayout()
     {
+        SelectionOutline.Data = null;
         FlowerHost.Width = metrics.FlowerSize;
         FlowerHost.Height = metrics.FlowerHeight;
         FlowerHost.Margin = new Thickness(0, metrics.FlowerTop, 0, 0);
@@ -237,31 +237,12 @@ public sealed partial class SelectorWindow : Window
         }
 
         float scale = (float)(size.Width / metrics.WindowWidth);
-        var flowerCenter = new Vector2((float)metrics.FlowerCenter.X, (float)metrics.FlowerCenter.Y) * scale;
-
-        var circles = new List<(Vector2 Center, float Radius)>(metrics.Count + 1);
-        if (metrics.CenterFillRadius > 0)
-        {
-            circles.Add((flowerCenter, (float)metrics.CenterFillRadius * scale));
-        }
-
-        for (int i = 0; i < metrics.Count; i++)
-        {
-            var point = metrics.ItemCenter(i, default);
-            circles.Add((flowerCenter + new Vector2((float)point.X, (float)point.Y) * scale, (float)RadialMetrics.PetalRadius * scale));
-        }
-
-        var pill = metrics.PillBounds;
-        var pillPx = new Rect(pill.X * scale, pill.Y * scale, pill.Width * scale, pill.Height * scale);
-        float cornerPx = (float)RadialMetrics.PillCornerRadius * scale;
-        backdropLayer.SetShape(new BackdropShape(circles, pillPx, cornerPx, new Vector2(size.Width, size.Height)), isDark);
+        var pixelSize = new Vector2(size.Width, size.Height);
+        backdropLayer.SetShape(BackdropShape.FromMetrics(metrics, pixelSize), isDark);
 
         // GDI regions are aliased, so the region extends past the antialiased edge to hold the drop shadow.
-        float shadowPx = (float)RadialMetrics.ShadowMargin * scale;
-        IntPtr region = CreateRoundRectRgn(
-            (int)Math.Floor(pillPx.Left - shadowPx), (int)Math.Floor(pillPx.Top - shadowPx),
-            (int)Math.Ceiling(pillPx.Right + shadowPx) + 1, (int)Math.Ceiling(pillPx.Bottom + shadowPx) + 1,
-            (int)Math.Round(2 * (cornerPx + shadowPx)), (int)Math.Round(2 * (cornerPx + shadowPx)));
+        var paddedShape = BackdropShape.FromMetrics(metrics, pixelSize, RadialMetrics.ShadowMargin);
+        IntPtr region = paddedShape.CreateWindowRegion((int)Math.Ceiling(WinUiEdgeStripInset * scale));
         if (region == IntPtr.Zero)
         {
             Debug.WriteLine("Could not create the selector window region.");
@@ -270,53 +251,6 @@ public sealed partial class SelectorWindow : Window
 
         try
         {
-            foreach (var (circleCenter, petalRadius) in circles)
-            {
-                float radius = petalRadius + shadowPx;
-                IntPtr circle = CreateEllipticRgn(
-                    (int)MathF.Floor(circleCenter.X - radius), (int)MathF.Floor(circleCenter.Y - radius),
-                    (int)MathF.Ceiling(circleCenter.X + radius) + 1, (int)MathF.Ceiling(circleCenter.Y + radius) + 1);
-                if (circle == IntPtr.Zero)
-                {
-                    Debug.WriteLine("Could not create a selector petal region.");
-                    return;
-                }
-
-                try
-                {
-                    if (CombineRgn(region, region, circle, RgnOr) == 0)
-                    {
-                        Debug.WriteLine("Could not combine the selector window region.");
-                        return;
-                    }
-                }
-                finally
-                {
-                    DeleteObject(circle);
-                }
-            }
-
-            int inset = (int)Math.Ceiling(WinUiEdgeStripInset * scale);
-            IntPtr interior = CreateRectRgn(inset, inset, size.Width - inset, size.Height - inset);
-            if (interior == IntPtr.Zero)
-            {
-                Debug.WriteLine("Could not create the selector interior region.");
-                return;
-            }
-
-            try
-            {
-                if (CombineRgn(region, region, interior, RgnAnd) == 0)
-                {
-                    Debug.WriteLine("Could not clip the selector window region.");
-                    return;
-                }
-            }
-            finally
-            {
-                DeleteObject(interior);
-            }
-
             if (SetWindowRgn(hwnd, region, true) == 0)
             {
                 Debug.WriteLine("Could not apply the selector window region.");
@@ -394,7 +328,13 @@ public sealed partial class SelectorWindow : Window
     private void Select(int index)
     {
         int count = ViewModel.Browsers.Count;
+        int previousIndex = selectedIndex;
         selectedIndex = count == 0 ? 0 : Math.Clamp(index, 0, count - 1);
+        SelectionOutline.Visibility = count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        if (count > 0 && (SelectionOutline.Data is null || previousIndex != selectedIndex))
+        {
+            SelectionOutline.Data = metrics.SelectionGeometry(selectedIndex);
+        }
         for (int i = 0; i < count; i++)
         {
             if (BrowserRing.TryGetElement(i) is RadialBrowserItem item)
@@ -425,8 +365,8 @@ public sealed partial class SelectorWindow : Window
             : string.IsNullOrEmpty(uri.Host) ? ViewModel.Url
             : uri.Host.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ? uri.Host[4..] : uri.Host;
 
-        PillTitle.Text = ViewModel.Browsers.Count > 0 ? ViewModel.Browsers[selectedIndex].Name : Constants.NAME;
-        PillHost.Text = link;
+        PillTitle.Text = string.IsNullOrEmpty(link) ? "Choose a browser" : link;
+        PillHost.Text = ViewModel.Url;
         PillLock.Visibility = hasUrl && uri!.Scheme == Uri.UriSchemeHttps ? Visibility.Visible : Visibility.Collapsed;
         PillLink.Visibility = string.IsNullOrEmpty(link) ? Visibility.Collapsed : Visibility.Visible;
     }
@@ -746,8 +686,6 @@ public sealed partial class SelectorWindow : Window
         Clipboard.Flush();
     }
 
-    private const int RgnAnd = 1;
-    private const int RgnOr = 2;
     private const double WinUiEdgeStripInset = 4;
     private static readonly IntPtr HwndTopmost = new(-1);
     private const uint SwpNoSize = 0x0001;
@@ -764,18 +702,6 @@ public sealed partial class SelectorWindow : Window
 
     [LibraryImport("dwmapi.dll")]
     private static partial int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
-
-    [LibraryImport("gdi32.dll")]
-    private static partial IntPtr CreateRoundRectRgn(int left, int top, int right, int bottom, int widthEllipse, int heightEllipse);
-
-    [LibraryImport("gdi32.dll")]
-    private static partial int CombineRgn(IntPtr destination, IntPtr source1, IntPtr source2, int mode);
-
-    [LibraryImport("gdi32.dll")]
-    private static partial IntPtr CreateRectRgn(int left, int top, int right, int bottom);
-
-    [LibraryImport("gdi32.dll")]
-    private static partial IntPtr CreateEllipticRgn(int left, int top, int right, int bottom);
 
     [LibraryImport("gdi32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]

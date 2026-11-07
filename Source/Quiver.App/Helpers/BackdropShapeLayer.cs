@@ -1,9 +1,7 @@
 using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.Effects;
-using Microsoft.Graphics.Canvas.Geometry;
 using Microsoft.UI.Dispatching;
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
@@ -21,6 +19,8 @@ internal sealed partial class BackdropShapeLayer : IDisposable
     private static readonly Guid IID_ICompositorDesktopInterop = new("29E691FA-4567-4DCA-B319-D0F207EB6807");
     private static readonly Color DarkAcrylicTintColor = Color.FromArgb(0x99, 0x20, 0x20, 0x20);
     private static readonly Color DarkFallbackColor = Color.FromArgb(0xFF, 0x20, 0x20, 0x20);
+    private static readonly Color LightAcrylicTintColor = Color.FromArgb(0xE8, 0xF4, 0xF5, 0xF7);
+    private static readonly Color LightFallbackColor = Color.FromArgb(0xFF, 0xF4, 0xF5, 0xF7);
     private const float ShadowBlurRadius = 16;
     private const float ShadowOffsetY = 4;
     private static IntPtr dispatcherQueueController;
@@ -119,26 +119,10 @@ internal sealed partial class BackdropShapeLayer : IDisposable
     {
         ObjectDisposedException.ThrowIf(disposed, this);
 
-        CanvasGeometry outline = CanvasGeometry.CreateRoundedRectangle(
-            null, shape.Pill, shape.PillCornerRadius, shape.PillCornerRadius);
-        try
-        {
-            foreach (var (center, radius) in shape.Circles)
-            {
-                using var circle = CanvasGeometry.CreateCircle(null, center, radius);
-                var combined = outline.CombineWith(circle, Matrix3x2.Identity, CanvasGeometryCombine.Union);
-                outline.Dispose();
-                outline = combined;
-            }
-
-            outlineGeometry.Path = new CompositionPath(outline);
-            silhouetteMask.Size = shape.Size;
-            silhouetteMaskSurface.SourceSize = shape.Size;
-        }
-        finally
-        {
-            outline.Dispose();
-        }
+        using var outline = shape.CreateGeometry();
+        outlineGeometry.Path = new CompositionPath(outline);
+        silhouetteMask.Size = shape.Size;
+        silhouetteMaskSurface.SourceSize = shape.Size;
 
         SetTheme(dark);
     }
@@ -150,6 +134,9 @@ internal sealed partial class BackdropShapeLayer : IDisposable
         {
             isDark = dark;
             ApplyShadowTheme();
+            fallbackBrush.Color = isDark ? DarkFallbackColor : LightFallbackColor;
+            acrylicBrush?.Properties.InsertColor("Tint.Color", isDark ? DarkAcrylicTintColor : LightAcrylicTintColor);
+            UpdateMaterial();
         }
     }
 
@@ -212,11 +199,15 @@ internal sealed partial class BackdropShapeLayer : IDisposable
             backdropBrush ??= compositor.CreateHostBackdropBrush();
             if (acrylicFactory is null)
             {
-                using var tint = new ColorSourceEffect { Color = DarkAcrylicTintColor };
+                using var tint = new ColorSourceEffect
+                {
+                    Name = "Tint",
+                    Color = isDark ? DarkAcrylicTintColor : LightAcrylicTintColor
+                };
                 using var tinted = new CompositeEffect { Mode = CanvasComposite.SourceOver };
                 tinted.Sources.Add(new CompositionEffectSourceParameter("Backdrop"));
                 tinted.Sources.Add(tint);
-                acrylicFactory = compositor.CreateEffectFactory(tinted);
+                acrylicFactory = compositor.CreateEffectFactory(tinted, new[] { "Tint.Color" });
             }
 
             acrylicBrush = acrylicFactory.CreateBrush();
@@ -343,5 +334,3 @@ internal sealed partial class BackdropShapeLayer : IDisposable
     private static partial int CreateDispatcherQueueController(DispatcherQueueOptions options, out IntPtr dispatcherQueueController);
     #endregion
 }
-
-internal sealed record BackdropShape(IReadOnlyList<(Vector2 Center, float Radius)> Circles, Rect Pill, float PillCornerRadius, Vector2 Size);

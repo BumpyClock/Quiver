@@ -28,24 +28,44 @@
         <Grid
             x:Name="FlowerHost"
             HorizontalAlignment="Center"
-            VerticalAlignment="Top"
-            RequestedTheme="Dark">
+            VerticalAlignment="Top">
             <Grid.Resources>
                 <ResourceDictionary>
                     <ResourceDictionary.ThemeDictionaries>
-                        <ResourceDictionary x:Key="Default">
-                            <SolidColorBrush x:Key="HubBackground" Color="#202020" />
-                            <SolidColorBrush x:Key="HubBackgroundPointerOver" Color="#2B2B2B" />
-                            <SolidColorBrush x:Key="HubBackgroundPressed" Color="#333333" />
+                        <ResourceDictionary x:Key="Dark">
+                            <SolidColorBrush x:Key="HubBackground" Color="Transparent" />
+                            <SolidColorBrush x:Key="HubBackgroundPointerOver" Color="#18FFFFFF" />
+                            <SolidColorBrush x:Key="HubBackgroundPressed" Color="#28FFFFFF" />
+                            <SolidColorBrush x:Key="SelectionFill" Color="#343D49" />
+                            <SolidColorBrush x:Key="SelectionStroke" Color="#F7F8FA" />
+                            <SolidColorBrush x:Key="HubForeground" Color="#F7F8FA" />
+                        </ResourceDictionary>
+                        <ResourceDictionary x:Key="Light">
+                            <SolidColorBrush x:Key="HubBackground" Color="Transparent" />
+                            <SolidColorBrush x:Key="HubBackgroundPointerOver" Color="#0C182432" />
+                            <SolidColorBrush x:Key="HubBackgroundPressed" Color="#18182432" />
+                            <SolidColorBrush x:Key="SelectionFill" Color="#FAFBFF" />
+                            <SolidColorBrush x:Key="SelectionStroke" Color="#182432" />
+                            <SolidColorBrush x:Key="HubForeground" Color="#182432" />
                         </ResourceDictionary>
                         <ResourceDictionary x:Key="HighContrast">
-                            <SolidColorBrush x:Key="HubBackground" Color="{ThemeResource SystemColorWindowColor}" />
+                            <SolidColorBrush x:Key="HubBackground" Color="{ThemeResource SystemColorHighlightColor}" />
                             <SolidColorBrush x:Key="HubBackgroundPointerOver" Color="{ThemeResource SystemColorHighlightColor}" />
                             <SolidColorBrush x:Key="HubBackgroundPressed" Color="{ThemeResource SystemColorHighlightColor}" />
+                            <SolidColorBrush x:Key="SelectionFill" Color="{ThemeResource SystemColorHighlightColor}" />
+                            <SolidColorBrush x:Key="SelectionStroke" Color="{ThemeResource SystemColorWindowTextColor}" />
+                            <SolidColorBrush x:Key="HubForeground" Color="{ThemeResource SystemColorHighlightTextColor}" />
                         </ResourceDictionary>
                     </ResourceDictionary.ThemeDictionaries>
                 </ResourceDictionary>
             </Grid.Resources>
+            <Canvas IsHitTestVisible="False">
+                <Path
+                    x:Name="SelectionOutline"
+                    Fill="{ThemeResource SelectionFill}"
+                    Stroke="{ThemeResource SelectionStroke}"
+                    StrokeThickness="2" />
+            </Canvas>
             <ItemsRepeater
                 x:Name="BrowserRing"
                 HorizontalAlignment="Center"
@@ -73,6 +93,7 @@
                 VerticalAlignment="Center"
                 AutomationProperties.Name="Link options"
                 BorderThickness="0"
+                Background="{ThemeResource HubBackground}"
                 Click="HubButton_Click"
                 CornerRadius="24"
                 ToolTipService.ToolTip="Link options">
@@ -85,7 +106,7 @@
                 </Button.Resources>
                 <FontIcon
                     FontSize="16"
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Foreground="{ThemeResource HubForeground}"
                     Glyph="&#xE712;" />
             </Button>
         </Grid>
@@ -99,7 +120,6 @@
             AutomationProperties.Name="Link options"
             BorderThickness="0"
             CornerRadius="12"
-            RequestedTheme="Dark"
             ToolTipService.ToolTip="{x:Bind ViewModel.Url, Mode=OneWay}">
             <Button.Resources>
                 <ResourceDictionary>
