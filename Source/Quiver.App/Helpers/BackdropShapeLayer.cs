@@ -1,9 +1,7 @@
 using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.Effects;
-using Microsoft.Graphics.Canvas.Geometry;
 using Microsoft.UI.Dispatching;
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
@@ -121,26 +119,10 @@ internal sealed partial class BackdropShapeLayer : IDisposable
     {
         ObjectDisposedException.ThrowIf(disposed, this);
 
-        CanvasGeometry outline = CanvasGeometry.CreateRoundedRectangle(
-            null, shape.Pill, shape.PillCornerRadius, shape.PillCornerRadius);
-        try
-        {
-            foreach (var (center, radius) in shape.Circles)
-            {
-                using var circle = CanvasGeometry.CreateCircle(null, center, radius);
-                var combined = outline.CombineWith(circle, Matrix3x2.Identity, CanvasGeometryCombine.Union);
-                outline.Dispose();
-                outline = combined;
-            }
-
-            outlineGeometry.Path = new CompositionPath(outline);
-            silhouetteMask.Size = shape.Size;
-            silhouetteMaskSurface.SourceSize = shape.Size;
-        }
-        finally
-        {
-            outline.Dispose();
-        }
+        using var outline = shape.CreateGeometry();
+        outlineGeometry.Path = new CompositionPath(outline);
+        silhouetteMask.Size = shape.Size;
+        silhouetteMaskSurface.SourceSize = shape.Size;
 
         SetTheme(dark);
     }
@@ -352,5 +334,3 @@ internal sealed partial class BackdropShapeLayer : IDisposable
     private static partial int CreateDispatcherQueueController(DispatcherQueueOptions options, out IntPtr dispatcherQueueController);
     #endregion
 }
-
-internal sealed record BackdropShape(IReadOnlyList<(Vector2 Center, float Radius)> Circles, Rect Pill, float PillCornerRadius, Vector2 Size);

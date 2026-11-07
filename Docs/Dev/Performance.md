@@ -32,11 +32,16 @@ Release-note context for the next release:
   Same-size warm opens reuse the last successful native shape.
 - The selector uses a continuous acrylic flower with 104 DIP petals and inset browser icon tiles.
   The plate, selection surface, icon tiles, keycaps, and their foregrounds follow the Windows light or
-  dark theme through live theme resources. High contrast uses paired system colors.
+  dark theme through live theme resources. High contrast uses paired system colors, including a highlight
+  background and highlight text for the hub's normal, hovered, and pressed states.
   Each petal shows its profile or browser name and a
   numbered keycap inside its icon tile. A single outlined selection joins the active petal to the transparent center
   button, using the same radial coordinates as the browser layout. Pointer and keyboard selection share
-  this outline instead of a separate rectangular system focus visual. Browser hit targets are circular.
+  this outline instead of a separate rectangular system focus visual. Static tangent bridges slightly widen
+  the acrylic flower's two- and three-browser waists so the complete selection and its stroke stay on the
+  plate. The same endpoints define the plate, its shadow mask, and the shadow-padded native window region.
+  Hovering or changing selection does not reshape the plate. Petal, ring, hub, and window dimensions stay
+  unchanged. Browser hit targets are circular.
   The bottom link card shows the destination host and full URL, with ellipsis for long addresses and
   the complete address in its tooltip. Browser selection does not replace the destination details.
   The silhouette casts a soft drop shadow that is lighter in the light Windows theme. The plate edge is
@@ -129,7 +134,13 @@ updates, and double disposal.
 settings. It checks rapid keyboard and programmatic focus changes, stable browser labels, and delayed
 browser focus notifications after focus has moved to link options. It also checks the ink stamp ring radii
 for two, four, and six browsers, the center disc, and the link options width. Selection checks cover
-the shared hub tangents, stroke bounds, and alignment with the arranged browser circles.
+both connectors' tangency to the petal and hub, stroke bounds, and alignment with the arranged browser circles.
+Full filled-selection-plus-stroke containment runs against the production Win2D backdrop builder for
+0 through 10 browsers at 100%, 125%, 150%, 175%, 200%, and 300% DPI, covering 330 selections. It allows
+0.05 DIP for curve flattening. Real GDI `PtInRegion` checks sample every half physical pixel along the
+selection and its shadow-padded envelope. Selection ink has no raster tolerance; the outer shadow band
+allows two physical pixels for integer ellipse/polygon scan conversion. Native window-edge clipping remains
+in force. The high-contrast resource check covers all three hub states without changing the desktop theme.
 
 `Tests/RuleMatchSmoke` accepts `--measure` for a local repeated-matching timing and allocation probe. This
 probe measures the matching API, not whole-application latency or memory use.

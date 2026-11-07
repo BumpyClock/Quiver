@@ -31,6 +31,7 @@
     <Content Include="Assets\internet.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="Assets\Package\*.png" />
     <ProjectReference Include="..\Quiver.Library\Quiver.Library.csproj" />
+    <InternalsVisibleTo Include="SelectorSmoke" />
   </ItemGroup>
 
   <PropertyGroup>

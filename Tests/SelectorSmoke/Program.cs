@@ -50,6 +50,7 @@ public sealed partial class SmokeApplication : Application
         {
             CliArgsChecks.Run();
             CheckMetrics();
+            SelectorGeometryChecks.Run();
             services = new ServiceCollection()
                 .AddSingleton<ISettingsService, TestSettings>()
                 .AddSingleton<IQuickViewService, TestQuickView>()
@@ -111,6 +112,14 @@ public sealed partial class SmokeApplication : Application
                         && IsDark(((TextBlock)item.FindName("PetalName")).Foreground) != dark,
                         "selected and unselected icon tiles, hints, and labels follow live theme changes");
                 }
+            }
+            var highContrast = (ResourceDictionary)((FrameworkElement)root.FindName("FlowerHost"))
+                .Resources.ThemeDictionaries["HighContrast"];
+            var highlightColor = ((SolidColorBrush)highContrast["SelectionFill"]).Color;
+            foreach (string key in new[] { "HubBackground", "HubBackgroundPointerOver", "HubBackgroundPressed" })
+            {
+                Check(((SolidColorBrush)highContrast[key]).Color == highlightColor,
+                    "all high-contrast hub states pair highlight backgrounds with highlight text");
             }
             root.RequestedTheme = ElementTheme.Default;
             var pill = (Button)root.FindName("NamePill");
@@ -248,7 +257,7 @@ public sealed partial class SmokeApplication : Application
                 "the ink center disc joins the petals without covering them");
             Check(metrics.PillWidth >= 264, "link options keep the concept caption width");
         }
-        foreach (int count in new[] { 0, 1, 2, 3, 6, 10 })
+        foreach (int count in Enumerable.Range(0, 11))
         {
             var metrics = RadialMetrics.For(count);
             for (int index = 0; index < count; index++)

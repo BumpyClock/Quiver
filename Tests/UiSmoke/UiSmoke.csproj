@@ -33,5 +33,7 @@
     <Compile Include="../../Source/Quiver.App/Views/BrowserContainerAssociation.cs" Link="BrowserContainerAssociation.cs" />
     <Compile Include="../../Source/Quiver.App/Helpers/UriLauncher.cs" Link="UriLauncher.cs" />
     <Compile Include="../../Source/Quiver.App/Helpers/BackdropShapeLayer.cs" Link="BackdropShapeLayer.cs" />
+    <Compile Include="../../Source/Quiver.App/Helpers/BackdropShape.cs" Link="BackdropShape.cs" />
+    <Compile Include="../../Source/Quiver.App/Controls/RadialLayout.cs" Link="RadialLayout.cs" />
   </ItemGroup>
 </Project>

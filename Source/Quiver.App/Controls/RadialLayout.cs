@@ -83,6 +83,24 @@ public readonly record struct RadialMetrics(int Count, double RingRadius, double
         return new Point(origin.X + RingRadius * Math.Cos(angle), origin.Y + RingRadius * Math.Sin(angle));
     }
 
+    /// <summary>Shared tangent endpoints. Outset expands both circles for the stroke or native shadow band.</summary>
+    public (Point PetalStart, Point PetalEnd, Point HubStart, Point HubEnd) SelectionTangents(
+        int index, Point origin, double outset = 0)
+    {
+        double radius = PetalRadius - 1 + outset;
+        double hubRadius = HubRadius + outset;
+        var center = ItemCenter(index, origin);
+        double angle = ItemAngle(index);
+        double tangent = Math.Acos((hubRadius - radius) / RingRadius);
+        var upper = new Point(Math.Cos(angle - tangent), Math.Sin(angle - tangent));
+        var lower = new Point(Math.Cos(angle + tangent), Math.Sin(angle + tangent));
+        return (
+            new Point(center.X + radius * upper.X, center.Y + radius * upper.Y),
+            new Point(center.X + radius * lower.X, center.Y + radius * lower.Y),
+            new Point(origin.X + hubRadius * lower.X, origin.Y + hubRadius * lower.Y),
+            new Point(origin.X + hubRadius * upper.X, origin.Y + hubRadius * upper.Y));
+    }
+
     public PathGeometry SelectionGeometry(int index)
     {
         double radius = PetalRadius - 1;
@@ -105,29 +123,22 @@ public readonly record struct RadialMetrics(int Count, double RingRadius, double
             return new PathGeometry { Figures = { circle } };
         }
 
-        double angle = ItemAngle(index);
-        double tangent = Math.Acos((HubRadius - radius) / RingRadius);
-        var upper = new Point(Math.Cos(angle - tangent), Math.Sin(angle - tangent));
-        var lower = new Point(Math.Cos(angle + tangent), Math.Sin(angle + tangent));
-        var figure = new PathFigure
-        {
-            StartPoint = new Point(center.X + radius * upper.X, center.Y + radius * upper.Y),
-            IsClosed = true
-        };
+        var tangents = SelectionTangents(index, FlowerOrigin);
+        var figure = new PathFigure { StartPoint = tangents.PetalStart, IsClosed = true };
         figure.Segments.Add(new ArcSegment
         {
-            Point = new Point(center.X + radius * lower.X, center.Y + radius * lower.Y),
+            Point = tangents.PetalEnd,
             Size = new Size(radius, radius),
             IsLargeArc = true,
             SweepDirection = SweepDirection.Clockwise
         });
         figure.Segments.Add(new LineSegment
         {
-            Point = new Point(FlowerOrigin.X + HubRadius * lower.X, FlowerOrigin.Y + HubRadius * lower.Y)
+            Point = tangents.HubStart
         });
         figure.Segments.Add(new ArcSegment
         {
-            Point = new Point(FlowerOrigin.X + HubRadius * upper.X, FlowerOrigin.Y + HubRadius * upper.Y),
+            Point = tangents.HubEnd,
             Size = new Size(HubRadius, HubRadius),
             SweepDirection = SweepDirection.Clockwise
         });

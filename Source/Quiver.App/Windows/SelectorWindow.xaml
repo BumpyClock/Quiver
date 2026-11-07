@@ -49,7 +49,7 @@
                             <SolidColorBrush x:Key="HubForeground" Color="#182432" />
                         </ResourceDictionary>
                         <ResourceDictionary x:Key="HighContrast">
-                            <SolidColorBrush x:Key="HubBackground" Color="{ThemeResource SystemColorWindowColor}" />
+                            <SolidColorBrush x:Key="HubBackground" Color="{ThemeResource SystemColorHighlightColor}" />
                             <SolidColorBrush x:Key="HubBackgroundPointerOver" Color="{ThemeResource SystemColorHighlightColor}" />
                             <SolidColorBrush x:Key="HubBackgroundPressed" Color="{ThemeResource SystemColorHighlightColor}" />
                             <SolidColorBrush x:Key="SelectionFill" Color="{ThemeResource SystemColorHighlightColor}" />
