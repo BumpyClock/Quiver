@@ -140,6 +140,12 @@ internal sealed partial class BackdropShapeLayer : IDisposable
         }
     }
 
+    public void SetVisible(bool visible)
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+        root.IsVisible = visible;
+    }
+
     public void PlayOpenAnimation(Vector2 centerPx, TimeSpan duration)
     {
         ObjectDisposedException.ThrowIf(disposed, this);

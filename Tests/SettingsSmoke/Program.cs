@@ -79,6 +79,77 @@ finally
     File.Delete(fixturePath + ".tmp");
 }
 
+string layoutPath = Path.Combine(fixtureDirectory, Guid.NewGuid().ToString("N") + ".json");
+const string legacyJson = """{"AppSettings":{"MinimizeOnFocusLoss":false,"RuleMatching":true},"Browsers":[],"Rulesets":[]}""";
+File.WriteAllText(layoutPath, legacyJson);
+var layoutService = new JsonFileService(layoutPath);
+try
+{
+    Check(new AppSettings().SelectorLayout == SelectorLayout.Radial, "new settings default to radial");
+    var layoutModel = new SettingsPageViewModel(layoutService);
+    Check(layoutModel.AppSettings.SelectorLayout == SelectorLayout.Radial && layoutModel.Option_SelectorLayout == 0,
+        "old JSON without layout defaults to radial and index zero");
+
+    var layoutSections = new List<SettingsSection>();
+    var layoutNotifications = new List<string?>();
+    var optionNotifications = new List<string?>();
+    layoutService.SettingsChanged += (_, args) => layoutSections.Add(args.Section);
+    layoutModel.AppSettings.PropertyChanged += (_, args) => layoutNotifications.Add(args.PropertyName);
+    layoutModel.PropertyChanged += (_, args) => optionNotifications.Add(args.PropertyName);
+    layoutModel.Option_SelectorLayout = 0;
+    layoutModel.Option_SelectorLayout = -1;
+    layoutModel.Option_SelectorLayout = 99;
+    Check(layoutSections.Count == 0 && layoutNotifications.Count == 0 && optionNotifications.Count == 0,
+        "unchanged radial and invalid indices emit no save or notifications");
+    Check(File.ReadAllText(layoutPath) == legacyJson, "unchanged layout leaves old JSON untouched");
+
+    layoutModel.Option_SelectorLayout = 1;
+    Check(layoutModel.AppSettings.SelectorLayout == SelectorLayout.List && layoutModel.Option_SelectorLayout == 1,
+        "list index maps both ways");
+    Check(layoutSections.SequenceEqual([SettingsSection.AppSettings]), "layout change emits AppSettings only");
+    Check(layoutNotifications.SequenceEqual([nameof(AppSettings.SelectorLayout)])
+        && optionNotifications.SequenceEqual([nameof(SettingsPageViewModel.Option_SelectorLayout)]),
+        "layout change notifies model and settings binding");
+    layoutModel.Option_SelectorLayout = 1;
+    Check(layoutSections.Count == 1 && layoutNotifications.Count == 1 && optionNotifications.Count == 1,
+        "unchanged list emits no save or notifications");
+    await layoutService.FlushAsync();
+    using (var persisted = JsonDocument.Parse(File.ReadAllText(layoutPath)))
+    {
+        Check(persisted.RootElement.GetProperty("AppSettings").GetProperty("SelectorLayout").GetInt32() == 1,
+            "list persists as numeric one");
+    }
+    var reloadedLayout = new SettingsPageViewModel(new JsonFileService(layoutPath));
+    Check(reloadedLayout.AppSettings.SelectorLayout == SelectorLayout.List && reloadedLayout.Option_SelectorLayout == 1,
+        "list reloads with matching index");
+    Check(!reloadedLayout.AppSettings.MinimizeOnFocusLoss && reloadedLayout.AppSettings.RuleMatching,
+        "layout save retains other app settings");
+
+    layoutModel.Option_SelectorLayout = -1;
+    layoutModel.Option_SelectorLayout = 99;
+    Check(layoutModel.AppSettings.SelectorLayout == SelectorLayout.List && layoutModel.Option_SelectorLayout == 1
+        && layoutSections.Count == 1, "transient or undefined indices preserve list without saving");
+    Check(layoutNotifications.Count == 1 && optionNotifications.Count == 1,
+        "undefined indices do not notify a layout change");
+    layoutModel.Option_SelectorLayout = 0;
+    Check(layoutModel.AppSettings.SelectorLayout == SelectorLayout.Radial && layoutModel.Option_SelectorLayout == 0
+        && layoutSections.Count == 2, "explicit radial index changes and saves the layout");
+    layoutModel.Option_SelectorLayout = 1;
+    layoutModel.Option_SelectorLayout = 0;
+    Check(layoutModel.AppSettings.SelectorLayout == SelectorLayout.Radial && layoutModel.Option_SelectorLayout == 0
+        && layoutSections.Count == 4, "valid indices map both ways with one save per change");
+    await layoutService.FlushAsync();
+    using var radialJson = JsonDocument.Parse(File.ReadAllText(layoutPath));
+    Check(radialJson.RootElement.GetProperty("AppSettings").GetProperty("SelectorLayout").GetInt32() == 0,
+        "radial persists as numeric zero");
+}
+finally
+{
+    await layoutService.FlushAsync();
+    File.Delete(layoutPath);
+    File.Delete(layoutPath + ".tmp");
+}
+
 string blockedDirectory = Path.Combine(fixtureDirectory, Guid.NewGuid().ToString("N"));
 string retryPath = Path.Combine(blockedDirectory, "settings.json");
 var retryService = new JsonFileService(retryPath);

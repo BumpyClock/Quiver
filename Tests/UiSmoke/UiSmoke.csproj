@@ -35,5 +35,6 @@
     <Compile Include="../../Source/Quiver.App/Helpers/BackdropShapeLayer.cs" Link="BackdropShapeLayer.cs" />
     <Compile Include="../../Source/Quiver.App/Helpers/BackdropShape.cs" Link="BackdropShape.cs" />
     <Compile Include="../../Source/Quiver.App/Controls/RadialLayout.cs" Link="RadialLayout.cs" />
+    <Compile Include="../../Source/Quiver.App/Controls/ListMetrics.cs" Link="ListMetrics.cs" />
   </ItemGroup>
 </Project>

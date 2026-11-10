@@ -25,6 +25,55 @@
             <KeyboardAccelerator Key="Escape" Invoked="EscapeAccelerator_Invoked" />
         </Grid.KeyboardAccelerators>
 
+        <Border
+            x:Name="ListHost"
+            Margin="0,20,0,0"
+            Padding="8"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Top"
+            Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}"
+            CornerRadius="12"
+            Translation="0,0,16"
+            Visibility="Collapsed">
+            <Border.Shadow>
+                <ThemeShadow />
+            </Border.Shadow>
+            <Grid RowSpacing="8">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <!-- Reserve space for the shared NamePill, which remains in the window root. -->
+                    <RowDefinition Height="56" />
+                </Grid.RowDefinitions>
+                <ScrollViewer
+                    x:Name="BrowserScroll"
+                    HorizontalScrollBarVisibility="Disabled"
+                    VerticalScrollBarVisibility="Auto">
+                    <ItemsRepeater
+                        x:Name="BrowserList"
+                        ElementIndexChanged="BrowserRing_ElementIndexChanged"
+                        ElementPrepared="BrowserRing_ElementPrepared"
+                        ItemsSource="{x:Bind ViewModel.Browsers, Mode=OneWay}"
+                        TabFocusNavigation="Once">
+                        <ItemsRepeater.Layout>
+                            <StackLayout />
+                        </ItemsRepeater.Layout>
+                        <ItemsRepeater.ItemTemplate>
+                            <DataTemplate x:DataType="viewModels:BrowserItemViewModel">
+                                <controls:ListBrowserItem BrowserItem="{x:Bind}" />
+                            </DataTemplate>
+                        </ItemsRepeater.ItemTemplate>
+                    </ItemsRepeater>
+                </ScrollViewer>
+                <TextBlock
+                    x:Name="EmptyListMessage"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="No visible browsers"
+                    Visibility="Collapsed" />
+            </Grid>
+        </Border>
+
         <Grid
             x:Name="FlowerHost"
             HorizontalAlignment="Center"

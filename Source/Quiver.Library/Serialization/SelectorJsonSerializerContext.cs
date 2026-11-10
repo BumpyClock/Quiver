@@ -9,6 +9,7 @@ namespace Quiver.Library.Serialization;
     WriteIndented = true)]
 [JsonSerializable(typeof(Settings))]
 [JsonSerializable(typeof(AppSettings))]
+[JsonSerializable(typeof(SelectorLayout))]
 [JsonSerializable(typeof(QuickViewSettings))]
 [JsonSerializable(typeof(QuickViewLaunchMode))]
 [JsonSerializable(typeof(QuickViewModifierKeys))]

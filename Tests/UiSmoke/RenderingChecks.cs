@@ -20,6 +20,8 @@ internal static class RenderingChecks
             layer.SetTheme(true);
             layer.SetTheme(false);
             layer.PlayOpenAnimation(new Vector2(120, 100), TimeSpan.FromMilliseconds(10));
+            layer.SetVisible(false);
+            layer.SetVisible(true);
             await Task.Delay(20);
         }
 

@@ -29,6 +29,7 @@
 Sometimes you might want to open a link in a browser of your choice, instead of the default one. Quiver lets you choose the browser each time you click a link (links outside of browsers). So naturally, it acts as default browser to do that.
 
 - A radial browser picker that opens under the mouse cursor, with a continuous acrylic flower, inset browser icons, and number-key shortcuts. The outlined selection joins the active petal to the center, stays within the matching acrylic and shadow silhouette, and follows both pointer and keyboard input.
+- Optional scrollable browser list that opens beside the cursor. Select **Settings > Picker layout > List**. The same keyboard shortcuts and alternate launches work in both layouts; Radial remains the default.
 - Supports adding custom browser configuration with Launch Arguments
 - Rules to automatically open a browser without prompting
 - Settings window to manage all the features

@@ -18,6 +18,24 @@ public partial class SettingsPageViewModel : ObservableObject
         _settingsService = settingsService;
     }
 
+    public int Option_SelectorLayout
+    {
+        get => AppSettings.SelectorLayout == SelectorLayout.List ? 1 : 0;
+        set
+        {
+            if (value is not (0 or 1)) return;
+            var layout = (SelectorLayout)value;
+            if (AppSettings.SelectorLayout == layout)
+            {
+                return;
+            }
+
+            AppSettings.SelectorLayout = layout;
+            _settingsService.UpdateAppSettings(AppSettings);
+            OnPropertyChanged();
+        }
+    }
+
     public bool Option_MinimizeOnFocusLoss
     {
         get => AppSettings.MinimizeOnFocusLoss;
