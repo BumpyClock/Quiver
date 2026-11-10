@@ -92,10 +92,33 @@ internal static class ListSelectorChecks
                 ((ListBrowserItem)ring.TryGetElement(0)).FindName("LaunchButton")),
             "production navigation focuses the first browser");
         Check(window.NavigateSelection(VirtualKey.Up), "up wraps from the first browser to the last");
-        await SmokeApplication.WaitForAsync(() => ring.TryGetElement(29) is ListBrowserItem { IsSelected: true }
-            && scroll.VerticalOffset > 0, "production navigation reveals the offscreen last browser");
+        try
+        {
+            await SmokeApplication.WaitForAsync(() => ring.TryGetElement(29) is ListBrowserItem { IsSelected: true }
+                && scroll.VerticalOffset > 0, "production navigation reveals the offscreen last browser");
+        }
+        catch
+        {
+            var target = ring.TryGetElement(29) as ListBrowserItem;
+            var focused = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(root.XamlRoot) as DependencyObject;
+            while (focused is not null and not BrowserItemControl) focused = VisualTreeHelper.GetParent(focused);
+            Console.WriteLine($"Navigation state: rowY={target?.TransformToVisual(ring).TransformPoint(default).Y}, target realized={target is not null}, selected={target?.IsSelected}, "
+                + $"height={target?.ActualHeight}, focused={(focused as BrowserItemControl)?.BrowserItem?.Name}, "
+                + $"offset={scroll.VerticalOffset}, scrollable={scroll.ScrollableHeight}, viewport={scroll.ViewportHeight}");
+            throw;
+        }
         var last = (ListBrowserItem)ring.TryGetElement(29);
         Check(last.IsSelected && scroll.VerticalOffset > 0, "production navigation focuses and scrolls offscreen choices");
+        var lastPosition = last.TransformToVisual(scroll).TransformPoint(default);
+        Check(lastPosition.Y >= -0.01 && lastPosition.Y + last.ActualHeight <= scroll.ViewportHeight + 0.01,
+            "keyboard wrap reveals the entire last browser row, not just a nonzero scroll offset");
+        Check(window.NavigateSelection(VirtualKey.Down), "down wraps back to the first browser");
+        await SmokeApplication.WaitForAsync(() => ring.TryGetElement(0) is ListBrowserItem { IsSelected: true }
+            && scroll.VerticalOffset < 1, "production navigation reveals the first browser after wrapping down");
+        Check(window.NavigateSelection(VirtualKey.Up), "up can reveal the last browser repeatedly");
+        await SmokeApplication.WaitForAsync(() => ring.TryGetElement(29) is ListBrowserItem { IsSelected: true }
+            && scroll.VerticalOffset > 0, "repeated keyboard wrapping preserves selection and scrolling");
+        last = (ListBrowserItem)ring.TryGetElement(29);
         Check(!window.NavigateSelection(VirtualKey.F5), "unrelated keys do not navigate");
         CheckHostFitsWindow(window);
         Check(last.ShortcutVisibility == Visibility.Collapsed, "rows beyond nine have no misleading number hint");

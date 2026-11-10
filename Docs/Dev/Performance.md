@@ -152,7 +152,12 @@ allows two physical pixels for integer ellipse/polygon scan conversion. Native w
 in force. The high-contrast resource check covers all three hub states without changing the desktop theme.
 List checks cover settings-driven layout switching, full-width rows, focus selection, light/dark labels,
 alternate-launch menus, production arrow navigation wrapping to an offscreen browser, bounded scrolling
-with 30 browsers, reopening at the first row, and the empty state. A short-window fixture followed by
+with 30 browsers, reopening at the first row, and the empty state. Wrapping in both directions checks
+that the destination row is fully visible, not merely focused with a nonzero scroll offset. List reveal
+uses the fixed row metric and the scroll viewer's viewport; it does not rely on the layout rectangle of
+a newly realized item. Platform-generated pointer-entry events are ignored so layout and scrolling do
+not replace keyboard selection; actual pointer and touch events keep their existing behavior.
+A short-window fixture followed by
 hidden browser hide/unhide checks that host sizing stays tied to actual bounds even when shape keys recur.
 Reintroducing nominal sizing into layout selection makes that regression check fail.
 Placement checks cover negative monitor origins, narrow work areas, horizontal flipping, and 100-300% DPI.

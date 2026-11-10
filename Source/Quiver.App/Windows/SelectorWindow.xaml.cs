@@ -427,7 +427,14 @@ public sealed partial class SelectorWindow : Window
         }
         if (layout == SelectorLayout.List) Items.UpdateLayout();
         item.FocusItem(focusState);
-        if (layout == SelectorLayout.List) item.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = false });
+        if (layout == SelectorLayout.List)
+        {
+            // Reveal fixed-height rows directly, without relying on a newly realized element's layout.
+            double top = index * ListMetrics.RowHeight;
+            double offset = Math.Min(top, Math.Max(BrowserScroll.VerticalOffset,
+                top + ListMetrics.RowHeight - BrowserScroll.ViewportHeight));
+            BrowserScroll.ChangeView(null, offset, null, true);
+        }
     }
 
     private void UpdatePill()
@@ -492,6 +499,8 @@ public sealed partial class SelectorWindow : Window
 
     private void BrowserItem_PointerEntered(object sender, PointerRoutedEventArgs e)
     {
+        // Layout and scrolling can synthesize entry without new pointer input.
+        if (e.IsGenerated) return;
         if (sender is not BrowserItemControl item || Items.GetElementIndex(item) is not (>= 0 and var index))
         {
             return;
