@@ -110,10 +110,19 @@ dotnet build Source/Quiver.App/Quiver.App.csproj -c Release -r win-x64 -p:Platfo
 dotnet publish Source/Quiver.App/Quiver.App.csproj -c Release -r win-x64 -p:Platform=x64 -p:GenerateAppxPackageOnBuild=false
 ```
 
+For NativeAOT verification, use x64 Visual Studio Developer PowerShell and include the Visual Studio
+Installer directory containing `vswhere.exe` on `PATH`. The picker control inheritance can be checked
+without packaging, signing, deploying, or reading user settings:
+
+```powershell
+dotnet publish Source/Quiver.App/Quiver.App.csproj -c Release -r win-x64 -p:Platform=x64 -p:SelfContained=true -p:PublishAot=true -p:WindowsPackageType=None -p:EnableMsixTooling=false -p:GenerateAppxPackageOnBuild=false -o Tests/SelectorSmoke/bin/aot-picker
+```
+
 The rule checks cover exact matching, domain boundaries, invalid expressions, regex syntax compatibility,
 timeouts, first-match ordering, edited content, cache capacity, immutable prepared snapshots, and cancellation.
 Settings checks cover section events, argument persistence, no-op commits, preservation of other sections,
 queued-save flushing, newest snapshot persistence, rules snapshot invalidation, and retry after storage failure.
+Layout settings checks also verify that transient/undefined ComboBox indices do not change or save the mode.
 Rust tests cover valid, oversized,
 malformed, and truncated frames, including the maximum accepted size.
 
@@ -130,8 +139,8 @@ in an offscreen test window. Drain checks cover active loads and canceled sole w
 UiSmoke also covers repeated Windows.UI.Composition desktop acrylic shape, shadow theme, and animation
 updates, and double disposal.
 
-`Tests/SelectorSmoke` runs the production selector in an inactive, offscreen window with in-memory
-settings. It checks rapid keyboard and programmatic focus changes, stable browser labels, and delayed
+`Tests/SelectorSmoke` runs the production selector with in-memory settings. Radial focus checks use
+an inactive, offscreen window. List lifecycle checks briefly activate the test picker, then move it offscreen. It checks rapid keyboard and programmatic focus changes, stable browser labels, and delayed
 browser focus notifications after focus has moved to link options. It also checks the ink stamp ring radii
 for two, four, and six browsers, the center disc, and the link options width. Selection checks cover
 both connectors' tangency to the petal and hub, stroke bounds, and alignment with the arranged browser circles.
@@ -141,6 +150,33 @@ Full filled-selection-plus-stroke containment runs against the production Win2D 
 selection and its shadow-padded envelope. Selection ink has no raster tolerance; the outer shadow band
 allows two physical pixels for integer ellipse/polygon scan conversion. Native window-edge clipping remains
 in force. The high-contrast resource check covers all three hub states without changing the desktop theme.
+List checks cover settings-driven layout switching, full-width rows, focus selection, light/dark labels,
+alternate-launch menus, production arrow navigation wrapping to an offscreen browser, bounded scrolling
+with 30 browsers, reopening at the first row, and the empty state. Wrapping in both directions checks
+that the destination row is fully visible, not merely focused with a nonzero scroll offset. List reveal
+uses the fixed row metric and the scroll viewer's viewport; it does not rely on the layout rectangle of
+a newly realized item. Platform-generated pointer-entry events are ignored so layout and scrolling do
+not replace keyboard selection; actual pointer and touch events keep their existing behavior.
+A short-window fixture followed by
+hidden browser hide/unhide checks that host sizing stays tied to actual bounds even when shape keys recur.
+Reintroducing nominal sizing into layout selection makes that regression check fail.
+Placement checks cover negative monitor origins, narrow work areas, horizontal flipping, and 100-300% DPI.
+Focus checks wait for the actual focused button and selected row to converge, then count synchronous
+`GettingFocus` events to detect unwanted focus movement. Asynchronous `GotFocus` delivery alone does not
+mean focus moved.
+Radial and List use separate XAML hosts and item controls. `BrowserItemControl` shares launch events,
+alternate-launch menus, shortcuts, and selection properties without constructing both item visual trees.
+The window retains commands, selection, and lifetime. It captures cursor/monitor placement once per open
+and reuses that snapshot during browser refreshes. List dimensions have one writer based on actual window
+bounds, applied before the native-shape cache check. Its internal grid owns row and footer allocation.
+The list card uses a XAML acrylic surface and shadow in the same visual tree as its rows. It does not
+replay the radial entrance animation or show a separately committed native plate. Cold-opening checks
+verify bound, arranged rows and full-opacity, unscaled content without an active entrance animation.
+Set `QUIVER_SELECTOR_CAPTURE_DIRECTORY` to an output directory for light/dark screenshots and sampled
+cold/warm opening sequences with timestamps and window bounds. Opening sequences show the picker beside
+the current cursor; theme captures briefly move it to screen position (100, 100). Capture work adds overhead,
+so these sequences are visual diagnostics, not opening-latency benchmarks. Fixtures use fake browsers
+without icons and do not read or change real user settings.
 
 `Tests/RuleMatchSmoke` accepts `--measure` for a local repeated-matching timing and allocation probe. This
 probe measures the matching API, not whole-application latency or memory use.

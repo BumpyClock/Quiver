@@ -15,6 +15,18 @@
                 <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Selector Settings" />
 
                 <StackPanel>
+                    <toolkit:SettingsCard Header="Picker layout">
+                        <toolkit:SettingsCard.HeaderIcon>
+                            <FontIcon Glyph="&#xE8FD;" />
+                        </toolkit:SettingsCard.HeaderIcon>
+                        <ComboBox
+                            MinWidth="140"
+                            AutomationProperties.Name="Picker layout"
+                            SelectedIndex="{x:Bind ViewModel.Option_SelectorLayout, Mode=TwoWay}">
+                            <ComboBoxItem Content="Radial" />
+                            <ComboBoxItem Content="List" />
+                        </ComboBox>
+                    </toolkit:SettingsCard>
                     <toolkit:SettingsCard Description="Close the browser picker when you click outside it" Header="Close on Focus Loss">
                         <toolkit:SettingsCard.HeaderIcon>
                             <FontIcon Glyph="&#xE8C5;" />

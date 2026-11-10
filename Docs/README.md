@@ -14,7 +14,8 @@ When Quiver is launched for the first time, it automatically detects the install
 {
   "AppSettings": {
     "MinimizeOnFocusLoss": true,
-    "RuleMatching": false
+    "RuleMatching": false,
+    "SelectorLayout": 0
   },
   "Browsers": [
     {
@@ -51,7 +52,8 @@ The following snippet shows the default options:
 ```json
 "AppSettings": {
     "MinimizeOnFocusLoss": true,
-    "RuleMatching": false
+    "RuleMatching": false,
+    "SelectorLayout": 0
 }
 ```
 
@@ -59,14 +61,17 @@ The following snippet shows the default options:
 
 - `MinimizeOnFocusLoss` defaults to **true** and hides the picker when you click outside it.
 - `RuleMatching` defaults to **false**. Enable it in **Quiver Settings > Rulesets** to automatically open links using [rule matching](./Features/RuleMatching.md).
+- `SelectorLayout` defaults to **0** (Radial). Select **Settings > Picker layout > List** to use **1** (List). Existing settings without this option keep Radial.
 
 ## Using the selector
 
-The selector opens centered on the mouse cursor. Each browser is an acrylic petal; the petals overlap into one flower so every browser is the same short move away. Two browsers sit side by side; three or more are spread evenly around the center, starting at the top. An outline reaches from the pointer to the selected petal, and the pill below the flower names it and shows the link's site.
+**Radial** remains the default. It opens centered on the mouse cursor. Each browser is an acrylic petal; the petals overlap into one flower so every browser is the same short move away. Two browsers sit side by side; three or more are spread evenly around the center, starting at the top. An outline reaches from the pointer to the selected petal. The pill below the flower shows the link's site and URL, not the selected browser's name.
 
-- The first petal is selected when the selector opens, so **Enter** opens the link there. Hover a petal or use the arrow keys to move the selection.
-- Click a petal, or press its number (**1**-**9**), to open the link in that browser.
-- Microsoft Edge with more than one profile shows a petal per profile, badged with the profile picture. See [browser profiles](./Features/BrowserConfiguration.md#browser-profiles).
-- Right-click a petal to pick one of its [alternate launches](./Features/BrowserConfiguration.md).
-- Click the pill to copy the link (**C**), edit it (**Alt+E**), open it in [Quick View](./Features/QuickView.md), or open **Rules** (**R**) and **Settings**.
+For a scrollable list of browsers, select **Settings > Picker layout > List**. The list appears at full size beside the cursor without an entrance animation. Browser updates retain its opening anchor instead of following the cursor. It keeps the same keyboard shortcuts and alternate-launch features as Radial.
+
+- The first browser is selected when the selector opens, so **Enter** opens the link there. Hover a petal or list row, or use the arrow keys to move the selection.
+- Click a browser, or press its number (**1**-**9**), to open the link in that browser.
+- Microsoft Edge with more than one profile shows a separate item per profile, badged with the profile picture. See [browser profiles](./Features/BrowserConfiguration.md#browser-profiles).
+- Right-click a browser to pick one of its [alternate launches](./Features/BrowserConfiguration.md).
+- Click the link pill or the list's link area to copy the link (**C**), edit it (**Alt+E**), open it in [Quick View](./Features/QuickView.md), or open **Rules** (**R**) and **Settings**.
 - Press **Esc** or click outside the selector to close it.

@@ -10,5 +10,6 @@
     <Compile Include="../../Source/Quiver.App/Services/Interfaces/ISettingsService.cs" Link="ISettingsService.cs" />
     <Compile Include="../../Source/Quiver.App/Services/JsonFileService.cs" Link="JsonFileService.cs" />
     <Compile Include="../../Source/Quiver.App/ViewModels/Settings/QuickViewPageViewModel.cs" Link="QuickViewPageViewModel.cs" />
+    <Compile Include="../../Source/Quiver.App/ViewModels/Settings/SettingsPageViewModel.cs" Link="SettingsPageViewModel.cs" />
   </ItemGroup>
 </Project>

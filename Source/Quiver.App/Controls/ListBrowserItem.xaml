@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<controls:BrowserItemControl
+    x:Class="Quiver.App.Controls.ListBrowserItem"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:Quiver.App.Controls"
+    Height="52">
+    <Grid>
+        <VisualStateManager.VisualStateGroups>
+            <VisualStateGroup x:Name="SelectionStates">
+                <VisualState x:Name="Unselected" />
+                <VisualState x:Name="Selected">
+                    <VisualState.Setters>
+                        <Setter Target="ListSelection.Opacity" Value="1" />
+                    </VisualState.Setters>
+                </VisualState>
+            </VisualStateGroup>
+        </VisualStateManager.VisualStateGroups>
+        <Border x:Name="ListSelection"
+            Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+            BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+            BorderThickness="1" CornerRadius="8" Opacity="0" IsHitTestVisible="False" />
+        <Button x:Name="LaunchButton"
+            HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+            HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+            Padding="12,0" CornerRadius="8" BorderThickness="0"
+            Background="Transparent"
+            AutomationProperties.Name="{x:Bind BrowserItem.Name, Mode=OneWay}"
+            Click="LaunchButton_Click"
+            ToolTipService.ToolTip="{x:Bind ToolTipText, Mode=OneWay}">
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="32" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid Width="32" Height="32" VerticalAlignment="Center">
+                    <Image Source="{x:Bind BrowserItem.Icon, Mode=OneWay}" />
+                    <Grid Width="16" Height="16" Margin="0,0,-4,-2"
+                        HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                        Visibility="{x:Bind ProfileBadgeVisibility, Mode=OneWay}">
+                        <Ellipse Fill="{ThemeResource AccentFillColorDefaultBrush}" />
+                        <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center"
+                            FontSize="8" FontWeight="Bold"
+                            Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"
+                            Text="{x:Bind BrowserItem.ProfileInitial, Mode=OneWay}" />
+                        <Ellipse>
+                            <Ellipse.Fill>
+                                <ImageBrush ImageSource="{x:Bind BrowserItem.ProfileAvatar, Mode=OneWay}" Stretch="UniformToFill" />
+                            </Ellipse.Fill>
+                        </Ellipse>
+                    </Grid>
+                </Grid>
+                <TextBlock x:Name="BrowserName" Grid.Column="1" VerticalAlignment="Center"
+                    Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                    Text="{x:Bind BrowserItem.Name, Mode=OneWay}"
+                    MaxLines="1" TextTrimming="CharacterEllipsis" />
+                <Border Grid.Column="2" MinWidth="22" Height="22" Padding="4,0"
+                    VerticalAlignment="Center" CornerRadius="5"
+                    Background="{ThemeResource ControlFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" BorderThickness="1"
+                    Visibility="{x:Bind ShortcutVisibility, Mode=OneWay}">
+                    <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center"
+                        FontSize="11" Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                        Text="{x:Bind ShortcutNumber, Mode=OneWay}" />
+                </Border>
+            </Grid>
+        </Button>
+    </Grid>
+</controls:BrowserItemControl>

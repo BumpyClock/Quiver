@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<UserControl
+<controls:BrowserItemControl
     x:Class="Quiver.App.Controls.RadialBrowserItem"
+    xmlns:controls="using:Quiver.App.Controls"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -9,7 +10,7 @@
     Height="104"
     mc:Ignorable="d">
 
-    <UserControl.Resources>
+    <controls:BrowserItemControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.ThemeDictionaries>
                 <ResourceDictionary x:Key="Dark">
@@ -50,7 +51,7 @@
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
         </ResourceDictionary>
-    </UserControl.Resources>
+    </controls:BrowserItemControl.Resources>
 
     <Grid>
         <VisualStateManager.VisualStateGroups>
@@ -192,4 +193,4 @@
             </Grid>
         </Button>
     </Grid>
-</UserControl>
+</controls:BrowserItemControl>

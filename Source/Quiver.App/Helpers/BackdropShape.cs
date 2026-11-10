@@ -50,6 +50,15 @@ internal sealed partial record BackdropShape(
         Vector2 ToPixels(Point point) => new((float)point.X * scale, (float)point.Y * scale);
     }
 
+    public static BackdropShape FromList(Vector2 size, float scale, double padding = 0)
+    {
+        var bounds = ListMetrics.Bounds(size.X / scale, size.Y / scale);
+        return new BackdropShape([], [],
+            new Rect((bounds.X - padding) * scale, (bounds.Y - padding) * scale,
+                (bounds.Width + 2 * padding) * scale, (bounds.Height + 2 * padding) * scale),
+            (float)(ListMetrics.CornerRadius + padding) * scale, size);
+    }
+
     public CanvasGeometry CreateGeometry()
     {
         CanvasGeometry outline = CanvasGeometry.CreateRoundedRectangle(null, Pill, PillCornerRadius, PillCornerRadius);

@@ -44,6 +44,7 @@ public sealed partial class SmokeApplication : Application
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
         SelectorWindow? window = null;
+        SelectorWindow? coldListWindow = null;
         ServiceProvider? services = null;
         string resultPath = Path.Combine(AppContext.BaseDirectory, "selector-smoke-result.txt");
         try
@@ -137,7 +138,7 @@ public sealed partial class SmokeApplication : Application
                 "opening without a URL shows a useful prompt instead of stale link details");
             window.ViewModel.Url = "https://" + linkTitle + "/document";
             int focusChanges = 0;
-            root.GotFocus += (_, _) => focusChanges++;
+            root.GettingFocus += (_, _) => focusChanges++;
             first.FocusItem(FocusState.Keyboard);
             second.FocusItem(FocusState.Keyboard);
             await CheckSettledAsync(second);
@@ -161,7 +162,12 @@ public sealed partial class SmokeApplication : Application
 
             second.FocusItem(FocusState.Keyboard);
             await CheckSettledAsync(second);
-            File.WriteAllText(resultPath, "PASS: selector focus settles and stale notifications cannot change selection.");
+            var testSettings = (TestSettings)services.GetRequiredService<ISettingsService>();
+            await ListSelectorChecks.RunAsync(window, testSettings);
+            testSettings.UpdateAppSettings(new AppSettings { SelectorLayout = SelectorLayout.List });
+            coldListWindow = new SelectorWindow();
+            await ListSelectorChecks.CheckColdOpeningAsync(coldListWindow);
+            File.WriteAllText(resultPath, "PASS: radial focus and list selector checks.");
             Console.WriteLine(File.ReadAllText(resultPath));
 
             static bool IsDark(Brush brush)
@@ -172,7 +178,9 @@ public sealed partial class SmokeApplication : Application
 
             async Task CheckSettledAsync(RadialBrowserItem item)
             {
-                await Task.Delay(100);
+                await WaitForAsync(() => item.IsSelected && ReferenceEquals(
+                    FocusManager.GetFocusedElement(root.XamlRoot), item.FindName("LaunchButton")),
+                    "browser focus and selection converge");
                 var focused = FocusManager.GetFocusedElement(root.XamlRoot) as DependencyObject;
                 while (focused is not null && !ReferenceEquals(focused, item))
                 {
@@ -225,6 +233,11 @@ public sealed partial class SmokeApplication : Application
             var shuttingDown = app.GetNestedType("AppState", BindingFlags.NonPublic)!.GetNestedType("ShuttingDown")!;
             app.GetField("state", BindingFlags.Static | BindingFlags.NonPublic)!
                 .SetValue(null, Activator.CreateInstance(shuttingDown));
+            if (coldListWindow is not null)
+            {
+                coldListWindow.Content = null;
+                coldListWindow.Close();
+            }
             if (window is not null)
             {
                 window.Content = null;
@@ -233,6 +246,16 @@ public sealed partial class SmokeApplication : Application
             services?.Dispose();
             Exit();
         }
+    }
+
+    internal static async Task WaitForAsync(Func<bool> condition, string name)
+    {
+        var timeout = System.Diagnostics.Stopwatch.StartNew();
+        while (!condition() && timeout.Elapsed < TimeSpan.FromSeconds(5))
+        {
+            await Task.Delay(20);
+        }
+        Check(condition(), name);
     }
 
     private static void Check(bool condition, string name)
@@ -319,8 +342,12 @@ internal sealed class TestSettings : ISettingsService
     public Settings LoadSettings() => settings;
     public PreparedRulesets PreparedRulesets => throw new NotSupportedException();
     public Task FlushAsync() => Task.CompletedTask;
-    public event EventHandler<SettingsChangedEventArgs>? SettingsChanged { add { } remove { } }
-    public void UpdateAppSettings(AppSettings value) => throw new NotSupportedException();
+    public event EventHandler<SettingsChangedEventArgs>? SettingsChanged;
+    public void UpdateAppSettings(AppSettings value)
+    {
+        settings.AppSettings = value;
+        SettingsChanged?.Invoke(this, new SettingsChangedEventArgs(SettingsSection.AppSettings));
+    }
     public void UpdateQuickView(QuickViewSettings value) => throw new NotSupportedException();
     public void UpdateBrowsers(ObservableCollection<Browser> value) => throw new NotSupportedException();
     public void UpdateRulesets(ObservableCollection<Ruleset> value) => throw new NotSupportedException();
