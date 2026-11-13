@@ -28,8 +28,8 @@
 
 Sometimes you might want to open a link in a browser of your choice, instead of the default one. Quiver lets you choose the browser each time you click a link (links outside of browsers). So naturally, it acts as default browser to do that.
 
-- A radial browser picker that opens under the mouse cursor, with a continuous acrylic flower, inset browser icons, and number-key shortcuts. The outlined selection joins the active petal to the center, stays within the matching acrylic and shadow silhouette, and follows both pointer and keyboard input.
-- Optional scrollable browser list that opens beside the cursor. Select **Settings > Picker layout > List**. The same keyboard shortcuts and alternate launches work in both layouts; Radial remains the default.
+- A radial browser picker that opens under the mouse cursor, with a smooth flower silhouette, larger browser icons directly on its petals without icon boxes, overlaid profile avatars, and inward-facing number-key shortcuts. Names have breathing room inside each petal; full browser/profile names are available in tooltips. The plate and selection share one rendering tree for aligned, antialiased edges. Choices appear fully visible without an entrance fade and follow both pointer and keyboard input.
+- Optional scrollable browser list that opens beside the cursor, fully visible without an entrance animation. Browser and profile names use separate lines, long profile names preserve their identifying suffix, and avatars leave browser artwork clear. Measured row heights accommodate larger text. On very short work areas, browser choices and link options scroll together instead of hiding targets. Keyboard navigation reveals whole rows, and a separate scrollbar gutter keeps targets clear. Select **Settings > Picker layout > List**. The same keyboard shortcuts and alternate launches work in both layouts. Radial remains the default; when it cannot fit the opening monitor, the picker uses List without changing your preference.
 - Supports adding custom browser configuration with Launch Arguments
 - Rules to automatically open a browser without prompting
 - Settings window to manage all the features

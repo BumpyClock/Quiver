@@ -5,7 +5,6 @@ using Quiver.App.ViewModels;
 using Quiver.Library;
 using Quiver.Library.Models;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.UI.Composition;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -33,31 +32,28 @@ namespace Quiver.App.Windows;
 [GeneratedBindableCustomProperty]
 public sealed partial class SelectorWindow : Window
 {
-    private static readonly TimeSpan OpenAnimationDuration = TimeSpan.FromMilliseconds(180);
-    private static readonly UISettings AnimationSettings = new();
-
     public SelectorPageViewModel ViewModel { get; }
     private readonly IQuickViewService quickViewService;
     private readonly ISettingsService settingsService;
     private readonly IntPtr hwnd;
 
     private readonly BackdropShapeLayer backdropLayer;
+    private readonly UISettings uiSettings = new();
 
     private enum SelectorState { Hidden, Shown, Closed }
 
     private SelectorState state = SelectorState.Hidden;
     private bool resizeQueued;
     private RadialMetrics metrics;
+    private ListMetrics listMetrics = ListMetrics.Compact;
+    private ListFrame listFrame;
     private SelectorLayout layout;
     private CursorSnapshot openingCursor;
     private ItemsRepeater Items => layout == SelectorLayout.List ? BrowserList : BrowserRing;
-    private SelectorGeometry Geometry => layout == SelectorLayout.List
-        ? new(ListMetrics.WindowWidth, ListMetrics.WindowHeight(metrics.Count), ListMetrics.Anchor, SelectorPlacement.BesideCursor)
-        : new(metrics.WindowWidth, metrics.WindowHeight, metrics.FlowerCenter, SelectorPlacement.Centered);
-    private (RadialMetrics Metrics, SelectorLayout Layout, int Width, int Height, float Scale)? appliedShape;
+    private SelectorGeometry Geometry => GeometryFor(layout, metrics, listMetrics);
+    private SelectorLayout PreferredLayout => ViewModel.AppSettings.SelectorLayout;
+    private (RadialMetrics Metrics, SelectorLayout Layout, int Width, int Height, double Scale)? appliedShape;
     private int selectedIndex;
-    private Vector3KeyFrameAnimation? openScaleAnimation;
-    private ScalarKeyFrameAnimation? openOpacityAnimation;
 
     #region Window Lifecycle
     public SelectorWindow()
@@ -66,8 +62,6 @@ public sealed partial class SelectorWindow : Window
         ViewModel = services.GetRequiredService<SelectorPageViewModel>();
         quickViewService = services.GetRequiredService<IQuickViewService>();
         settingsService = services.GetRequiredService<ISettingsService>();
-        ViewModel.BrowserLaunched += ViewModel_BrowserLaunched;
-        ViewModel.PropertyChanged += ViewModel_PropertyChanged;
         hwnd = WindowNative.GetWindowHandle(this);
 
         var presenter = OverlappedPresenter.Create();
@@ -79,21 +73,24 @@ public sealed partial class SelectorWindow : Window
         AppWindow.SetPresenter(presenter);
         AppWindow.IsShownInSwitchers = false;
 
-        Activated += Window_Activated;
-        Closed += SelectorWindow_Closed;
-
         InitializeComponent();
-        ViewModel.Browsers.CollectionChanged += ViewModel_Browsers_CollectionChanged;
         SystemBackdrop = new TransparentTintBackdrop();
         RemoveWindowFrame();
-        backdropLayer = new BackdropShapeLayer(hwnd);
+        backdropLayer = new BackdropShapeLayer(PlateShadowHost, SelectorPlate);
+        metrics = RadialMetrics.For(ViewModel.Browsers.Count);
+        layout = EffectiveLayout(PreferredLayout, metrics, openingCursor);
+        ApplyLayout();
+        Select(selectedIndex);
+
+        ViewModel.BrowserLaunched += ViewModel_BrowserLaunched;
+        ViewModel.PropertyChanged += ViewModel_PropertyChanged;
+        ViewModel.Browsers.CollectionChanged += ViewModel_Browsers_CollectionChanged;
         DiscRoot.ActualThemeChanged += DiscRoot_ActualThemeChanged;
         AppWindow.Changed += AppWindow_Changed;
         settingsService.SettingsChanged += SettingsChanged;
-        metrics = RadialMetrics.For(ViewModel.Browsers.Count);
-        layout = ViewModel.AppSettings.SelectorLayout == SelectorLayout.List ? SelectorLayout.List : SelectorLayout.Radial;
-        ApplyLayout();
-        Select(selectedIndex);
+        uiSettings.TextScaleFactorChanged += UiSettings_TextScaleFactorChanged;
+        Activated += Window_Activated;
+        Closed += SelectorWindow_Closed;
     }
 
     public void Init(CliArgs args)
@@ -117,7 +114,6 @@ public sealed partial class SelectorWindow : Window
         }
 
 #if DEBUG
-        // No minimize on debug when not in focus
 #else
         if (ViewModel.AppSettings.MinimizeOnFocusLoss)
         {
@@ -136,6 +132,7 @@ public sealed partial class SelectorWindow : Window
         }
 
         settingsService.SettingsChanged -= SettingsChanged;
+        uiSettings.TextScaleFactorChanged -= UiSettings_TextScaleFactorChanged;
         state = SelectorState.Closed;
         ViewModel.CancelIconLoading();
         ViewModel.BrowserLaunched -= ViewModel_BrowserLaunched;
@@ -144,8 +141,6 @@ public sealed partial class SelectorWindow : Window
         AppWindow.Changed -= AppWindow_Changed;
         DiscRoot.ActualThemeChanged -= DiscRoot_ActualThemeChanged;
         Activated -= Window_Activated;
-        openScaleAnimation?.Dispose();
-        openOpacityAnimation?.Dispose();
         backdropLayer.Dispose();
     }
     #endregion
@@ -163,21 +158,28 @@ public sealed partial class SelectorWindow : Window
     public void ShowWindow()
     {
         if (state == SelectorState.Closed) return;
+        ShowWindow(CursorPosition.Capture());
+    }
+
+    internal void ShowWindow(CursorSnapshot opening)
+    {
+        if (state == SelectorState.Closed) return;
+        openingCursor = opening;
         ViewModel.RefreshAppSettings();
         ViewModel.RefreshBrowsers();
         state = SelectorState.Shown;
         ApplyMetrics();
         Select(0);
-        openingCursor = CursorPosition.Capture();
         var bounds = openingCursor.Place(Geometry);
         AppWindow.MoveAndResize(bounds);
+        Bindings.Update();
+        UpdateShape();
         if (layout == SelectorLayout.List)
         {
-            Bindings.Update();
-            UpdateShape();
             BrowserScroll.ChangeView(null, 0, null, true);
-            DiscRoot.UpdateLayout();
+            ListFrameScroll.ChangeView(null, 0, null, true);
         }
+        DiscRoot.UpdateLayout();
         AppWindow.Show();
         AppWindow.MoveAndResize(bounds);
         UpdateShape();
@@ -186,7 +188,6 @@ public sealed partial class SelectorWindow : Window
         this.SetForegroundWindow();
         DiscRoot.UpdateLayout();
         FocusSelection();
-        if (layout == SelectorLayout.Radial) PlayOpenAnimation();
     }
 
     private void ResizeForLayout()
@@ -197,7 +198,7 @@ public sealed partial class SelectorWindow : Window
             return;
         }
 
-        var previous = Geometry.Anchor;
+        var previous = Geometry;
         bool changed = ApplyMetrics();
         if (state == SelectorState.Hidden)
         {
@@ -206,33 +207,22 @@ public sealed partial class SelectorWindow : Window
 
         if (changed)
         {
-            if (layout == SelectorLayout.List)
-            {
-                AppWindow.MoveAndResize(openingCursor.Place(Geometry));
-            }
-            else
-            {
-                var current = AppWindow.Position;
-                double scale = DiscRoot.XamlRoot?.RasterizationScale ?? 1.0;
-                var geometry = Geometry;
-                AppWindow.MoveAndResize(new RectInt32(
-                    current.X + (int)Math.Round((previous.X - geometry.Anchor.X) * scale),
-                    current.Y + (int)Math.Round((previous.Y - geometry.Anchor.Y) * scale),
-                    (int)Math.Round(geometry.Width * scale),
-                    (int)Math.Round(geometry.Height * scale)));
-            }
+            AppWindow.MoveAndResize(openingCursor.Resize(previous, Geometry, AppWindow.Position));
         }
         UpdateShape();
+        RevealFocusedListTarget();
     }
 
     private bool ApplyMetrics()
     {
         var next = RadialMetrics.For(ViewModel.Browsers.Count);
-        var nextLayout = ViewModel.AppSettings.SelectorLayout == SelectorLayout.List ? SelectorLayout.List : SelectorLayout.Radial;
-        bool changed = metrics != next || layout != nextLayout;
+        var nextLayout = EffectiveLayout(PreferredLayout, next, openingCursor);
+        var nextList = nextLayout == SelectorLayout.List ? MeasureList(next.Count) : listMetrics;
+        bool changed = metrics != next || layout != nextLayout || listMetrics != nextList;
         if (changed)
         {
             metrics = next;
+            listMetrics = nextList;
             layout = nextLayout;
             ApplyLayout();
         }
@@ -240,8 +230,37 @@ public sealed partial class SelectorWindow : Window
         return changed;
     }
 
+    internal static SelectorGeometry GeometryFor(SelectorLayout layout, RadialMetrics metrics, ListMetrics? list = null)
+        => layout == SelectorLayout.List ? (list ?? ListMetrics.Compact).Geometry(metrics.Count)
+            : new(metrics.WindowWidth, metrics.WindowHeight, metrics.FlowerCenter, SelectorPlacement.Centered);
+
+    internal ListMetrics ListGeometry => listMetrics;
+
+    internal ListBrowserItem ListRowProbe { get; private set; } = CreateListRowProbe();
+
+    private static ListBrowserItem CreateListRowProbe() => new()
+    {
+        BrowserItem = new BrowserItemViewModel(new Browser("Ag", string.Empty), new BrowserProfile(string.Empty, "Ag", null)),
+        ShortcutNumber = 1,
+    };
+
+    private ListMetrics MeasureList(int count)
+    {
+        EmptyListMessage.Visibility = count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        var link = PillLink.Visibility;
+        PillLink.Visibility = Visibility.Visible;
+        var measured = ListMetrics.Measure(ListRowProbe, EmptyListMessage, NamePill);
+        PillLink.Visibility = link;
+        return measured;
+    }
+
+    internal static SelectorLayout EffectiveLayout(SelectorLayout preferred, RadialMetrics metrics, CursorSnapshot opening)
+        => preferred != SelectorLayout.List && opening.Fits(GeometryFor(SelectorLayout.Radial, metrics))
+            ? SelectorLayout.Radial : SelectorLayout.List;
+
     private void ApplyLayout()
     {
+        if (layout == SelectorLayout.Radial) PlaceNamePill(DiscRoot);
         SelectionOutline.Data = null;
         FlowerHost.Visibility = layout == SelectorLayout.Radial ? Visibility.Visible : Visibility.Collapsed;
         ListHost.Visibility = layout == SelectorLayout.List ? Visibility.Visible : Visibility.Collapsed;
@@ -250,8 +269,21 @@ public sealed partial class SelectorWindow : Window
         else ApplyRadialLayout();
     }
 
+    private void PlaceNamePill(Panel parent)
+    {
+        if (parent.Children.Contains(NamePill)) return;
+        var focus = NamePill.FocusState;
+        (ReferenceEquals(parent, DiscRoot) ? ListFrameContent : DiscRoot).Children.Remove(NamePill);
+        if (ReferenceEquals(parent, DiscRoot)) DiscRoot.Children.Insert(DiscRoot.Children.IndexOf(FlowerHost) + 1, NamePill);
+        else parent.Children.Add(NamePill);
+        if (focus == FocusState.Unfocused) return;
+        DiscRoot.UpdateLayout();
+        NamePill.Focus(focus);
+    }
+
     private void ApplyRadialLayout()
     {
+        NamePill.UseLayoutRounding = false;
         NamePill.Translation = Vector3.Zero;
         FlowerHost.Width = metrics.FlowerSize;
         FlowerHost.Height = metrics.FlowerHeight;
@@ -259,35 +291,68 @@ public sealed partial class SelectorWindow : Window
         NamePill.Width = metrics.PillWidth;
         NamePill.Height = RadialMetrics.PillHeight;
         NamePill.Margin = new Thickness(0, metrics.PillTop, 0, 0);
+        HubButton.Margin = new Thickness(0, metrics.FlowerOrigin.Y - RadialMetrics.HubRadius, 0, 0);
         HubButton.Visibility = metrics.CenterFillRadius > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void ApplyListLayout()
     {
-        EmptyListMessage.Visibility = metrics.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        NamePill.Height = ListMetrics.FooterHeight;
+        ListRowsLayout.MinItemHeight = listMetrics.Row;
+        BrowserList.Height = metrics.Count * listMetrics.Row;
+        NamePill.UseLayoutRounding = true;
+        NamePill.Height = listMetrics.Footer;
         NamePill.Translation = new Vector3(0, 0, 16);
         var visual = ElementCompositionPreview.GetElementVisual(NamePill);
         visual.StopAnimation("Scale");
         visual.StopAnimation("Opacity");
         visual.Scale = Vector3.One;
         visual.Opacity = 1;
+        for (int index = 0; index < metrics.Count; index++)
+        {
+            if (BrowserList.TryGetElement(index) is FrameworkElement row) row.Height = listMetrics.Row;
+        }
     }
 
-    private void SizeListHost(SizeInt32 size, float scale)
+    private void SizeListHost(SizeInt32 size, double scale)
     {
-        var bounds = ListMetrics.Bounds(size.Width / scale, size.Height / scale);
-        ListHost.Width = bounds.Width;
-        ListHost.Height = bounds.Height;
-        NamePill.Width = Math.Max(0, bounds.Width - 2 * ListMetrics.Padding);
-        NamePill.Margin = new Thickness(0,
-            size.Height / scale - ListMetrics.ShadowMargin - ListMetrics.Padding - ListMetrics.FooterHeight, 0, 0);
+        listFrame = listMetrics.Frame(size, scale, metrics.Count);
+        ListHost.Width = listFrame.Width;
+        ListHost.Height = listFrame.Height;
+        ListFrameContent.Height = listFrame.Extent;
+        ListBody.Height = listFrame.Body;
+        BrowserScroll.MaxHeight = listFrame.Body;
+        NamePill.Width = Math.Max(0, listFrame.Width - 2 * ListMetrics.Padding);
+        NamePill.Margin = new Thickness(0, listFrame.FooterTop + (listFrame.Scrolls ? 0 : ListMetrics.ShadowMargin + ListMetrics.Padding), 0, 0);
+        PlaceNamePill(listFrame.Scrolls ? ListFrameContent : DiscRoot);
+    }
+
+    private void RevealListFrame(double top, double bottom)
+    {
+        if (layout != SelectorLayout.List || !listFrame.Scrolls) return;
+        DiscRoot.UpdateLayout();
+        ListFrameScroll.ChangeView(null, listFrame.Offset(ListFrameScroll.VerticalOffset, top, bottom), null, true);
+    }
+
+    private void ListFrameTarget_GotFocus(object sender, RoutedEventArgs e) => RevealFocusedListTarget();
+
+    private void RevealFocusedListTarget()
+    {
+        if (layout != SelectorLayout.List) return;
+        DiscRoot.UpdateLayout();
+        int index = GetFocusedItemIndex();
+        if (index >= 0) RevealListItem(index);
+        else if (FocusManager.GetFocusedElement(DiscRoot.XamlRoot) is FrameworkElement target
+            && (ReferenceEquals(target, NamePill) || ReferenceEquals(target, ManageBrowsersButton)))
+        {
+            double top = target.TransformToVisual(ListFrameContent).TransformPoint(default).Y - ListMetrics.Padding;
+            RevealListFrame(top, top + target.ActualHeight);
+        }
     }
 
     private void UpdateShape()
     {
         var size = AppWindow.Size;
-        float scale = layout == SelectorLayout.List ? (float)CursorPosition.WindowScale(hwnd) : (float)(size.Width / metrics.WindowWidth);
+        double scale = layout == SelectorLayout.List ? CursorPosition.WindowScale(hwnd) : size.Width / metrics.WindowWidth;
         if (layout == SelectorLayout.List) SizeListHost(size, scale);
         var shapeKey = (metrics, layout, size.Width, size.Height, scale);
         bool isDark = DiscRoot.ActualTheme != ElementTheme.Light;
@@ -300,12 +365,13 @@ public sealed partial class SelectorWindow : Window
         var pixelSize = new Vector2(size.Width, size.Height);
         if (layout == SelectorLayout.Radial)
         {
-            backdropLayer.SetShape(BackdropShape.FromMetrics(metrics, pixelSize), isDark);
+            backdropLayer.SetShape(BackdropShape.FromMetrics(metrics,
+                new Vector2((float)metrics.WindowWidth, (float)metrics.WindowHeight)), isDark);
         }
 
         // GDI regions are aliased, so the region extends past the antialiased edge to hold the drop shadow.
         var paddedShape = layout == SelectorLayout.List
-            ? BackdropShape.FromList(pixelSize, scale, ListMetrics.ShadowMargin)
+            ? BackdropShape.FromList(pixelSize, (float)scale, ListMetrics.ShadowMargin)
             : BackdropShape.FromMetrics(metrics, pixelSize, RadialMetrics.ShadowMargin);
         IntPtr region = paddedShape.CreateWindowRegion((int)Math.Ceiling(WinUiEdgeStripInset * scale));
         if (region == IntPtr.Zero)
@@ -342,52 +408,6 @@ public sealed partial class SelectorWindow : Window
         DwmSetWindowAttribute(hwnd, DwmaBorderColor, ref noBorder, sizeof(int));
     }
 
-    private void PlayOpenAnimation()
-    {
-        if (!AnimationSettings.AnimationsEnabled)
-        {
-            return;
-        }
-
-        var size = AppWindow.Size;
-        float scale = (float)(size.Width / metrics.WindowWidth);
-        var origin = metrics.FlowerCenter;
-        backdropLayer.PlayOpenAnimation(
-            new Vector2((float)origin.X, (float)origin.Y) * scale, OpenAnimationDuration);
-
-        var flowerVisual = ElementCompositionPreview.GetElementVisual(FlowerHost);
-        EnsureOpenAnimations(flowerVisual.Compositor);
-        var scaleAnimation = openScaleAnimation!;
-        var opacityAnimation = openOpacityAnimation!;
-        flowerVisual.CenterPoint = new Vector3((float)metrics.FlowerOrigin.X, (float)metrics.FlowerOrigin.Y, 0);
-        flowerVisual.StartAnimation("Scale", scaleAnimation);
-        flowerVisual.StartAnimation("Opacity", opacityAnimation);
-
-        var pillVisual = ElementCompositionPreview.GetElementVisual(NamePill);
-        pillVisual.CenterPoint = new Vector3(
-            (float)metrics.PillWidth / 2, (float)(metrics.FlowerCenter.Y - metrics.PillTop), 0);
-        pillVisual.StartAnimation("Scale", scaleAnimation);
-        pillVisual.StartAnimation("Opacity", opacityAnimation);
-    }
-
-    private void EnsureOpenAnimations(Compositor compositor)
-    {
-        if (openScaleAnimation is not null && openOpacityAnimation is not null)
-        {
-            return;
-        }
-
-        var easing = compositor.CreateCubicBezierEasingFunction(new Vector2(0.16f, 1f), new Vector2(0.3f, 1f));
-        openScaleAnimation = compositor.CreateVector3KeyFrameAnimation();
-        openScaleAnimation.InsertKeyFrame(0f, new Vector3(0.82f, 0.82f, 1));
-        openScaleAnimation.InsertKeyFrame(1f, Vector3.One, easing);
-        openScaleAnimation.Duration = OpenAnimationDuration;
-
-        openOpacityAnimation = compositor.CreateScalarKeyFrameAnimation();
-        openOpacityAnimation.InsertKeyFrame(0f, 0f);
-        openOpacityAnimation.InsertKeyFrame(1f, 1f, easing);
-        openOpacityAnimation.Duration = OpenAnimationDuration;
-    }
     #endregion
 
     #region Selection
@@ -413,42 +433,46 @@ public sealed partial class SelectorWindow : Window
 
     private void FocusSelection()
     {
-        if (ViewModel.Browsers.Count == 0) NamePill.Focus(FocusState.Programmatic);
+        if (ViewModel.Browsers.Count == 0)
+        {
+            if (layout == SelectorLayout.List) ManageBrowsersButton.Focus(FocusState.Programmatic);
+            else NamePill.Focus(FocusState.Programmatic);
+        }
         else FocusBrowser(selectedIndex, FocusState.Programmatic);
     }
 
     private void FocusBrowser(int index, FocusState focusState)
     {
+        if (layout == SelectorLayout.List)
+        {
+            RevealListItem(index);
+            DiscRoot.UpdateLayout();
+        }
         var element = layout == SelectorLayout.List ? Items.GetOrCreateElement(index) : Items.TryGetElement(index);
         if (element is not BrowserItemControl item)
         {
             NamePill.Focus(focusState);
             return;
         }
-        if (layout == SelectorLayout.List) Items.UpdateLayout();
         item.FocusItem(focusState);
-        if (layout == SelectorLayout.List)
-        {
-            // Reveal fixed-height rows directly, without relying on a newly realized element's layout.
-            double top = index * ListMetrics.RowHeight;
-            double offset = Math.Min(top, Math.Max(BrowserScroll.VerticalOffset,
-                top + ListMetrics.RowHeight - BrowserScroll.ViewportHeight));
-            BrowserScroll.ChangeView(null, offset, null, true);
-        }
+    }
+
+    private void RevealListItem(int index)
+    {
+        double top = index * listMetrics.Row;
+        double offset = Math.Min(top, Math.Max(BrowserScroll.VerticalOffset,
+            top + listMetrics.Row - BrowserScroll.ViewportHeight));
+        BrowserScroll.ChangeView(null, offset, null, true);
+        RevealListFrame(0, listFrame.Body);
     }
 
     private void UpdatePill()
     {
-        bool hasUrl = Uri.TryCreate(ViewModel.Url, UriKind.Absolute, out var uri);
-        string link = !hasUrl ? ViewModel.Url ?? string.Empty
-            : uri!.IsFile ? System.IO.Path.GetFileName(uri.LocalPath)
-            : string.IsNullOrEmpty(uri.Host) ? ViewModel.Url
-            : uri.Host.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ? uri.Host[4..] : uri.Host;
-
-        PillTitle.Text = string.IsNullOrEmpty(link) ? "Choose a browser" : link;
-        PillHost.Text = ViewModel.Url;
-        PillLock.Visibility = hasUrl && uri!.Scheme == Uri.UriSchemeHttps ? Visibility.Visible : Visibility.Collapsed;
-        PillLink.Visibility = string.IsNullOrEmpty(link) ? Visibility.Collapsed : Visibility.Visible;
+        var address = SelectorAddress.For(ViewModel.Url, layout == SelectorLayout.List);
+        PillTitle.Text = string.IsNullOrEmpty(address.Title) ? "Choose a browser" : address.Title;
+        PillHost.Text = address.Detail;
+        PillLock.Visibility = address.IsSecure ? Visibility.Visible : Visibility.Collapsed;
+        PillLink.Visibility = string.IsNullOrEmpty(address.Title) ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void HubButton_Click(object sender, RoutedEventArgs e) => LinkMenu.ShowAt(HubButton);
@@ -469,6 +493,7 @@ public sealed partial class SelectorWindow : Window
 
         item.ShortcutNumber = args.Index + 1;
         item.IsSelected = args.Index == selectedIndex;
+        if (item is ListBrowserItem) item.Height = listMetrics.Row;
         item.PointerEntered -=BrowserItem_PointerEntered;
         item.PointerEntered += BrowserItem_PointerEntered;
         item.GotFocus -= BrowserItem_GotFocus;
@@ -488,12 +513,16 @@ public sealed partial class SelectorWindow : Window
         }
     }
 
+    private void DiscRoot_FocusChanged(object sender, RoutedEventArgs e)
+        => SelectionOutline.StrokeThickness = GetFocusedItemIndex() >= 0 ? 2 : 0;
+
     private void BrowserItem_GotFocus(object sender, RoutedEventArgs e)
     {
         int focused = GetFocusedItemIndex();
         if (focused >= 0 && sender is BrowserItemControl item && Items.GetElementIndex(item) == focused)
         {
             Select(focused);
+            RevealFocusedListTarget();
         }
     }
 
@@ -549,6 +578,13 @@ public sealed partial class SelectorWindow : Window
         }
     }
 
+    private void UiSettings_TextScaleFactorChanged(UISettings sender, object args)
+        => DiscRoot.DispatcherQueue.TryEnqueue(() =>
+        {
+            ListRowProbe = CreateListRowProbe();
+            QueueGeometryUpdate();
+        });
+
     private void DiscRoot_ActualThemeChanged(FrameworkElement sender, object args)
         => backdropLayer.SetTheme(DiscRoot.ActualTheme != ElementTheme.Light);
 
@@ -596,6 +632,8 @@ public sealed partial class SelectorWindow : Window
     private void EditUrlBtnClick(object sender, RoutedEventArgs e) => ShowEditUrlFlyout();
 
     private void SettingsBtnClick(object sender, RoutedEventArgs e) => App.ShowSettings(SettingsTab.Settings);
+
+    private void ManageBrowsersBtnClick(object sender, RoutedEventArgs e) => App.ShowSettings(SettingsTab.Browsers);
 
     private void RulesBtnClick(object sender, RoutedEventArgs e) => App.ShowSettings(SettingsTab.Rulesets);
 

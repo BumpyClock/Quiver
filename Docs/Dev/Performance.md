@@ -27,27 +27,67 @@ Release-note context for the next release:
   composition objects and respect the Windows animation preference.
 - Selector hover and keyboard focus use separate handlers. Delayed focus notifications cannot move
   focus or replace a newer selection, preventing browser highlights from cycling without input.
-- The selector backdrop layer keeps its compositor geometry, brushes, shadow, and animation definitions
-  when the theme changes. It updates the existing tint and fallback brushes as well as the shadow.
-  Same-size warm opens reuse the last successful native shape.
-- The selector uses a continuous acrylic flower with 104 DIP petals and inset browser icon tiles.
-  The plate, selection surface, icon tiles, keycaps, and their foregrounds follow the Windows light or
+- The radial plate, focus ink, browser content, and shadow now share the WinUI XAML rendering tree.
+  The plate uses a WinUI XAML acrylic brush and an antialiased geometry group. Native root renders do
+  not establish desktop-host blur. Its live alpha mask casts
+  the shadow. This removes the independently rasterized desktop-compositor mask and the edge mismatch
+  between that mask and the XAML selection. Same-size warm opens reuse the last successful native region.
+- The selector uses a continuous acrylic flower with 104 DIP petals and bare browser artwork, without
+  icon container fills or borders. The plate, selection surface, keycaps, and their foregrounds follow the Windows light or
   dark theme through live theme resources. High contrast uses paired system colors, including a highlight
   background and highlight text for the hub's normal, hovered, and pressed states.
-  Each petal shows its profile or browser name and a
-  numbered keycap inside its icon tile. A single outlined selection joins the active petal to the transparent center
-  button, using the same radial coordinates as the browser layout. Pointer and keyboard selection share
-  this outline instead of a separate rectangular system focus visual. Static tangent bridges slightly widen
+  An 80 by 52 DIP unpainted icon/badge layout slot and upward-inset content leave at least six DIPs between each label's layout bounds
+  and the circular petal edge at normal text scale. Google Chrome remains fully visible. Longer names
+  use measured middle ellipsis, preferring complete distinguishing suffix words and word-boundary prefixes.
+  Unbroken names retain a grapheme-safe middle-cut fallback. Truncation removes whitespace next to the ellipsis. Full browser/profile
+  identity remains in the tooltip and accessible name. Bare browser artwork is 40 DIP. Profile avatars
+  overlay its lower-left edge, including profiles without a number shortcut. Numbered keycaps sit beside
+  the artwork on each petal's center-facing horizontal side, right on left petals and left on right petals.
+  They leave the center button clear. Semibold 12 DIP digits and stronger light-theme keycap tones keep
+  shortcuts distinct from the petal. The existing 1-9 shortcut contract is unchanged. Bitmap
+  artwork snaps to device pixels after ancestor layout, while vector plate and focus coordinates stay
+  unrounded. A single outlined selection joins the active petal to the transparent center button, using
+  the same radial coordinates as the browser layout. A separate two-DIP system-accent underline below
+  the label marks actual keyboard focus without boxing the icon. Pointer mode hides that underline. Its focus-state
+  callback detaches on unload. Moving focus to link options keeps browser selection fill but removes
+  the browser contour, leaving one active focus owner. Returning to a browser restores its contour.
+  The selected outer stroke has a concentric
+  two-DIP inset from the plate edge, avoiding a double-weight rim. Static tangent bridges slightly widen
   the acrylic flower's two- and three-browser waists so the complete selection and its stroke stay on the
   plate. The same endpoints define the plate, its shadow mask, and the shadow-padded native window region.
-  Hovering or changing selection does not reshape the plate. Petal, ring, hub, and window dimensions stay
-  unchanged. Browser hit targets are circular.
+  Hovering or changing selection does not reshape the plate. Petal and hub sizes stay unchanged.
+  The ring expands with browser count to keep selection ink at least four DIPs away from neighboring
+  labels, artwork and visible badges. Three-browser radius is 83 DIP to clear the enlarged inward-facing
+  keycaps. Two-browser placement stays compact. Browser hit targets are circular.
+  Odd-count flowers use their actual lowest petal bounds, keeping the same 14 DIP geometric link-card
+  gap as even counts instead of leaving an empty part of the ring viewport. The hub stays on the radial
+  center rather than the shortened viewport's midpoint. The light selection outline is softer but retains
+  at least 3:1 contrast against its selection surface.
   The bottom link card shows the destination host and full URL, with ellipsis for long addresses and
   the complete address in its tooltip. Browser selection does not replace the destination details.
   The silhouette casts a soft drop shadow that is lighter in the light Windows theme. The plate edge is
   antialiased instead of following the aliased window region. Clicks within the shadow band no longer
-  reach the window behind the selector. With transparency effects off or acrylic unavailable, the plate
-  falls back to solid gray in the matching theme.
+  reach the window behind the selector. The brush defines a solid fallback palette in the matching
+  theme. Live desktop blur and transparency-off behavior remain unverified.
+
+- List rows keep a 52 DIP minimum at normal text size and separate browser identity from the profile
+  label. One measured List metric owns row, recovery-body and footer heights, viewport allocation and
+  keyboard reveal. Scalable text can grow without clipping the row or overlapping the footer. When a
+  short work area cannot fit the pinned footer and one row or recovery body, the complete List frame
+  scrolls instead of hiding all browser choices. Keyboard focus reveals browser rows, recovery and link
+  options within that frame. Normal-height List keeps its pinned footer. The shared
+  measured middle-ellipsis formatter preserves profile suffixes without splitting Unicode text elements.
+  Inline profile avatars no longer cover browser artwork. Rows without number shortcuts reclaim that
+  column's text width. Selection uses a stable fill; keyboard focus uses system-accent native focus ink.
+  A reserved scrollbar gutter and an integral-row viewport remove clipped row slivers while preserving
+  full reveal on keyboard wrap. Row allocation uses rounded native window dimensions, so custom DPI
+  rounding does not discard a whole row. List content and its footer use device-pixel layout rounding;
+  the radial vector root stays unrounded. Profile text retains a native ellipsis fallback.
+  List destination captions show path/query/fragment without repeating the host. The host caption
+  retains the complete HTTP(S) hostname, non-default ports and IPv6 brackets; `www` and apex hosts remain
+  distinct. Tooltips and UI Automation retain the complete address. The shared destination card has a
+  subtle persistent plate and an offset system-accent focus outline. Empty List state includes Manage
+  browsers with matching accent ink, offset focus treatment and extra caption clearance.
 
 ## Additional changes
 
@@ -60,11 +100,16 @@ Release-note context for the next release:
   their image references using the container's saved association, even after WinUI clears its content.
   Editing or leaving a browser preview cancels its obsolete request.
 - Selector updates preserve collection identity and apply individual moves, replacements, additions, and
-  removals. Opening and highlighting the selector reuse composition animations and easing functions.
-  `BackdropShapeLayer` retains desktop-compositor path geometry, the acrylic effect factory and brush, the
-  shared silhouette mask surface, easing, and animation definitions. `SetTheme` updates the tint,
-  fallback color, and shadow without rebuilding geometry. Temporary Win2D union intermediates and owned resources are disposed. Teardown is
-  idempotent.
+  removals. Both picker layouts bind and arrange before presentation and open fully opaque at full size.
+  The radial zero-opacity, 82%-scale, 180 ms entrance has been removed. `BackdropShapeLayer` retains only
+  the XAML plate's alpha mask and composition shadow; theme updates change shadow colors without rebuilding
+  geometry. Selected item resources reapply after load and queued theme propagation, so selected labels
+  and keycaps do not retain the previous theme. Native tests cycle light/dark themes twelve times. Temporary Win2D union intermediates and owned resources are disposed.
+  Teardown is idempotent. Selector subscriptions attach only after XAML and window setup complete,
+  so failed initialization cannot leave callbacks that dereference an uninitialized visual tree.
+- Unpackaged NativeAOT publishing includes the application PRI and compiled XAML as explicit publish
+  inputs. MSIX publishing keeps its existing resource path. The publication smoke script verifies
+  declared resources in a fresh output directory and can observe a separately launched selector.
 - The selector caches the last successful native shape by radial metrics and pixel window dimensions.
   Same-size warm opens reuse that shape. Collection and native-size notifications coalesce into one
   queued UI-dispatcher update. Unchanged metrics skip resize work. Selected item labels still refresh in
@@ -115,8 +160,13 @@ Installer directory containing `vswhere.exe` on `PATH`. The picker control inher
 without packaging, signing, deploying, or reading user settings:
 
 ```powershell
-dotnet publish Source/Quiver.App/Quiver.App.csproj -c Release -r win-x64 -p:Platform=x64 -p:SelfContained=true -p:PublishAot=true -p:WindowsPackageType=None -p:EnableMsixTooling=false -p:GenerateAppxPackageOnBuild=false -o Tests/SelectorSmoke/bin/aot-picker
+.\Tests\PublishSmoke\Test-UnpackagedPublish.ps1 -PublishDirectory _Publish/picker-aot-check
 ```
+
+The publication check requires a fresh output directory, then verifies the application PRI and every
+compiled application XAML file. Use `-VerifyOnly` to inspect an existing publication. Optional
+`-ObserveProcessId <pid>` verifies a separately started published selector; the script never starts or
+stops the app. A completed build alone does not prove that the published app launches.
 
 The rule checks cover exact matching, domain boundaries, invalid expressions, regex syntax compatibility,
 timeouts, first-match ordering, edited content, cache capacity, immutable prepared snapshots, and cancellation.
@@ -136,13 +186,14 @@ recycled image reference release, and superseded editor preview cancellation. Ca
 the explicit maintenance drain.
 Container checks also cover cleared event data, reassignment, and scrolling an actual 1,000-row ListView
 in an offscreen test window. Drain checks cover active loads and canceled sole waiters.
-UiSmoke also covers repeated Windows.UI.Composition desktop acrylic shape, shadow theme, and animation
-updates, and double disposal.
+UiSmoke also covers repeated XAML plate geometry and shadow theme/visibility updates, and double disposal.
 
-`Tests/SelectorSmoke` runs the production selector with in-memory settings. Radial focus checks use
-an inactive, offscreen window. List lifecycle checks briefly activate the test picker, then move it offscreen. It checks rapid keyboard and programmatic focus changes, stable browser labels, and delayed
-browser focus notifications after focus has moved to link options. It also checks the ink stamp ring radii
-for two, four, and six browsers, the center disc, and the link options width. Selection checks cover
+`Tests/SelectorSmoke` runs the production selector with in-memory settings. Initial radial focus checks
+use an inactive, offscreen window. Radial polish and List lifecycle checks activate the native picker,
+then move it offscreen when not capturing. The twelve-opening radial timing loop runs only in explicit
+capture mode. It checks rapid keyboard and programmatic focus changes, stable browser labels, and delayed
+browser focus notifications after focus has moved to link options. It also checks compact two-browser
+placement, radial spacing, the center disc, and the link options width. Selection checks cover
 both connectors' tangency to the petal and hub, stroke bounds, and alignment with the arranged browser circles.
 Full filled-selection-plus-stroke containment runs against the production Win2D backdrop builder for
 0 through 10 browsers at 100%, 125%, 150%, 175%, 200%, and 300% DPI, covering 330 selections. It allows
@@ -153,9 +204,15 @@ in force. The high-contrast resource check covers all three hub states without c
 List checks cover settings-driven layout switching, full-width rows, focus selection, light/dark labels,
 alternate-launch menus, production arrow navigation wrapping to an offscreen browser, bounded scrolling
 with 30 browsers, reopening at the first row, and the empty state. Wrapping in both directions checks
-that the destination row is fully visible, not merely focused with a nonzero scroll offset. List reveal
-uses the fixed row metric and the scroll viewer's viewport; it does not rely on the layout rectangle of
-a newly realized item. Platform-generated pointer-entry events are ignored so layout and scrolling do
+that the destination row is fully visible, not merely focused with a nonzero scroll offset. Repeated
+wrap cycles also require actual focus on the expected row. Navigation reveals the measured uniform-row offset
+and completes layout before retrieving its focus target, so recycling cannot reassign a held control
+between lookup and focus. List reveal
+uses the measured row metric and the scroll viewer's viewport; it does not rely on the layout rectangle of
+a newly realized item. Implicit focus scrolling is disabled for the list host so a parked, force-realized
+row cannot override that reveal with a stale negative layout position. Explicit navigation and actual
+current-focus notifications share the measured-row reveal, including focus entered through other APIs.
+Platform-generated pointer-entry events are ignored so layout and scrolling do
 not replace keyboard selection; actual pointer and touch events keep their existing behavior.
 A short-window fixture followed by
 hidden browser hide/unhide checks that host sizing stays tied to actual bounds even when shape keys recur.
@@ -167,16 +224,86 @@ mean focus moved.
 Radial and List use separate XAML hosts and item controls. `BrowserItemControl` shares launch events,
 alternate-launch menus, shortcuts, and selection properties without constructing both item visual trees.
 The window retains commands, selection, and lifetime. It captures cursor/monitor placement once per open
-and reuses that snapshot during browser refreshes. List dimensions have one writer based on actual window
-bounds, applied before the native-shape cache check. Its internal grid owns row and footer allocation.
-The list card uses a XAML acrylic surface and shadow in the same visual tree as its rows. It does not
-replay the radial entrance animation or show a separately committed native plate. Cold-opening checks
+and reuses that snapshot during browser refreshes. If the complete radial bounds cannot fit that monitor,
+the effective layout falls back to List without saving a different preference. A later opening that fits
+regains Radial. Layout transitions and same-Radial growth share the opening work-area clamp while
+preserving a fitting radial anchor. Fit checks cover full flower/footer/shadow bounds, corner refreshes,
+negative origins and multiple scales. List dimensions have one writer based on actual window bounds,
+applied before the native-shape cache check. A measured List frame owns body and footer allocation.
+The one-column uniform virtualizing layout and its explicit total height use that same row metric,
+preventing stale estimated scroll extents after live text-size changes. Allocation keeps double precision
+through the 101-DPI boundary; graphics conversion happens afterward. A second frame scroller activates
+only when the pinned footer plus one whole row or recovery cannot fit. In that mode the existing footer
+moves into the frame; its geometry owns the extent and focus-reveal offsets. Live layout changes and
+focus events share one post-layout actual-focus reveal. Recovery reveal uses the link's own bounds,
+not the possibly oversized empty body. Restoring space or switching to Radial returns the footer to
+its original root slot and preserves its focus kind.
+Both layouts use XAML acrylic and shadows in the same visual tree as their controls. Neither replays
+an entrance animation or shows a separately committed native plate. Cold-opening checks
 verify bound, arranged rows and full-opacity, unscaled content without an active entrance animation.
 Set `QUIVER_SELECTOR_CAPTURE_DIRECTORY` to an output directory for light/dark screenshots and sampled
 cold/warm opening sequences with timestamps and window bounds. Opening sequences show the picker beside
 the current cursor; theme captures briefly move it to screen position (100, 100). Capture work adds overhead,
 so these sequences are visual diagnostics, not opening-latency benchmarks. Fixtures use fake browsers
 without icons and do not read or change real user settings.
+
+Set `QUIVER_SELECTOR_POLISH_ONLY=1` for the focused radial fixture. It always asserts fully arranged,
+opaque, unscaled presentation immediately after `ShowWindow` returns, before compositor waits, the
+first rendering event or image encoding. A deferred-arrangement mutation must be rejected. Radial
+rendering fixtures pass an explicit unconstrained work-area snapshot at the actual native scale so
+all 2-10 browser cases remain Radial; separate fit fixtures retain real and constrained work areas.
+With `QUIVER_SELECTOR_CAPTURE_DIRECTORY` set, it saves actual WinUI `RenderTargetBitmap` captures of
+2 through 10 choices in light/dark themes, including every selection for 2, 3, and 6 choices and
+long profile names. Native containment checks exercise all 108 selections/theme combinations across
+those nine browser counts. They require four DIPs between the full selected surface/stroke and every
+neighboring label/artwork rectangle or visible badge shape, using actual arranged XAML coordinates. Edge and Chrome must be installed for these icon-bearing capture fixtures. These
+are native XAML renders, not desktop screenshots or mockups. Desktop backdrop sampling and screen
+presentation remain separate checks. The fixture also checks partially covered boundary pixels to
+reject an aliased binary plate mask, full-name tooltips, and six-DIP circular label clearance.
+They also verify native UI Automation button names, suffix-preserving Unicode truncation, consistent
+ellipsis spacing, actual device-pixel bitmap origins, fixed card-to-petal gaps, hub placement, and badges inside
+the unpainted layout slot, lower-left avatar overlays, inward-facing non-overlapping keycaps, hub clearance,
+4.5:1 keycap-text contrast, and 3:1 disclosure-chevron contrast
+against the native fallback palette. These palette checks do not qualify arbitrary desktop backgrounds.
+Icon-bearing captures also include seven-frame native focus sequences in both themes with `interaction-light-trace.json` and
+`interaction-dark-trace.json`. They record actual focus, selection, browser stroke and keyboard-indicator
+opacity while production Down navigation advances and wraps, focus moves to link options and returns,
+and the same selected browser switches to pointer-mode focus. These are API-driven interactions, not
+physical keystrokes or a screen-reader session.
+Set `QUIVER_SELECTOR_SOLVE_SPACING=1` together with `QUIVER_SELECTOR_POLISH_ONLY=1` to rerun the bounded
+geometry search against measured icon-slot/label dimensions. It writes `radial-spacing-solution.txt` beside
+the smoke executable, including the minimum radius at every browser count. This keeps spacing changes
+reproducible instead of guessing larger radii after each overlap.
+`radial-opening-timing.csv` records `ShowWindow` return, `DwmFlush`, and the first WinUI rendering event
+for one first and eleven warm presentations with preloaded icons, before screenshot encoding.
+Icon preparation is outside this timing interval and is explicitly not a cold-icon-loading measurement.
+These are in-process fixture timings,
+not OS link-click, process activation, rule-matching, icon-loading, or physical display latency.
+
+The ordinary SelectorSmoke suite also runs icon-independent List polish assertions without a capture
+directory or installed browsers. Set `QUIVER_SELECTOR_LIST_NAVIGATION_ONLY=1` to run the focused List
+navigation and repeated-wrap fixture. `QUIVER_SELECTOR_TEXT_SCALE_ONLY=1` runs strict controlled-font
+checks from 1x through 2.25x, including live increases/decreases, exact scroll extents, row text, keycaps,
+recovery/footer separation and full wrap reveal. Profile fixtures are restored and required after every
+reopen and visible constrained refresh. Constrained checks also exercise recovery/footer focus, Tab,
+frame scrolling, focused last-row retention through text growth/shrink and viewport shrink, recovery
+links in oversized bodies, return to normal size and List/Radial switching in simulated 200 and 226-DIP work areas
+at the actual native raster scale. Compiled geometry covers the corresponding 600 and 680-pixel work
+areas at 300%. Native checks do not change Windows settings or qualify real 300% desktop appearance,
+the actual global accessibility-setting event path, or mouse-wheel chaining between the two scrollers.
+A target taller than the padded frame viewport cannot be shown whole at once.
+A separate child process with missing SelectorWindow XAML checks
+that failed construction shuts down without a second exception.
+
+Set `QUIVER_SELECTOR_LIST_POLISH_ONLY=1` with `QUIVER_SELECTOR_CAPTURE_DIRECTORY` for native icon-bearing
+List captures at counts 0, 1, 2, 6 and 30 in both themes. `list-interaction-trace.json` records actual
+keyboard/pointer-mode/card/recovery focus and production wrapping. Checks cover full UI Automation
+identity, visible profile suffixes, artwork/avatar separation, scrollbar clearance, integral-row
+viewports, complete last-row reveal and full destination tooltip/help text. The in-process first-render
+fixture still uses two unprofiled cached-icon rows, not cold profile discovery. `capture-bounds.csv`
+records raw bitmap and actual viewport sizes; empty WinUI focus-canvas overhang is removed without
+rescaling native pixels. An attempted OS cursor-injection hover capture did not produce a qualified
+pointer-entry event; actual hover and hardware input remain unverified.
 
 `Tests/RuleMatchSmoke` accepts `--measure` for a local repeated-matching timing and allocation probe. This
 probe measures the matching API, not whole-application latency or memory use.

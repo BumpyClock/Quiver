@@ -83,10 +83,10 @@ internal static partial class SelectorGeometryChecks
         Console.WriteLine($"PASS: {selections} full selection/stroke masks and native shadow envelopes across counts 0-10 and DPI 100-300%.");
     }
 
-    private static CanvasGeometry CreateSelection(RadialMetrics metrics, int index, float scale)
+    internal static CanvasGeometry CreateSelection(RadialMetrics metrics, int index, float scale, Point? actualOffset = null)
     {
         using var builder = new CanvasPathBuilder(null);
-        var offset = new Point(metrics.FlowerCenter.X - metrics.FlowerOrigin.X,
+        var offset = actualOffset ?? new Point(metrics.FlowerCenter.X - metrics.FlowerOrigin.X,
             metrics.FlowerCenter.Y - metrics.FlowerOrigin.Y);
         var figure = metrics.SelectionGeometry(index).Figures[0];
         builder.BeginFigure(ToPixels(figure.StartPoint));

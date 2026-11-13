@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk" TreatAsLocalProperty="TargetFramework;Platform">
   <Import Project="..\WinUIAotApp.Shared.props" />
   <Import Project="..\Meta.Shared.props" />
 
@@ -46,6 +46,32 @@
 
   <Target Name="EnsureNativeMessagingHost" BeforeTargets="BeforeBuild" Condition="!Exists('$(NativeMessagingHostPath)')">
     <Error Text="NativeMessagingHost.exe not found at $(NativeMessagingHostPath). Run: cargo build --release --target $(RustTarget)" />
+  </Target>
+
+  <Target Name="IncludeUnpackagedXamlResourcesInPublish"
+          BeforeTargets="ComputeResolvedFilesToPublishList"
+          Condition="'$(WindowsPackageType)' == 'None'">
+    <PropertyGroup>
+      <_UnpackagedXamlExtension>.xbf</_UnpackagedXamlExtension>
+      <_UnpackagedXamlExtension Condition="'$(DisableXbfGeneration)' == 'true'">.xaml</_UnpackagedXamlExtension>
+    </PropertyGroup>
+    <AssignTargetPath Files="@(ApplicationDefinition);@(Page)" RootFolder="$(MSBuildProjectDirectory)">
+      <Output TaskParameter="AssignedFiles" ItemName="_UnpackagedXamlToPublish" />
+    </AssignTargetPath>
+    <ItemGroup>
+      <_UnpackagedXamlToPublish Remove="@(_UnpackagedXamlToPublish)" Condition="'%(_UnpackagedXamlToPublish.ExcludedFromBuild)' == 'true'" />
+      <_UnpackagedXamlToPublish>
+        <CompiledPath>$([System.IO.Path]::ChangeExtension('%(TargetPath)', '$(_UnpackagedXamlExtension)'))</CompiledPath>
+      </_UnpackagedXamlToPublish>
+      <ResolvedFileToPublish Include="$(ProjectPriFullPath)">
+        <RelativePath>$(ProjectPriFileName)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="@(_UnpackagedXamlToPublish->'$(XamlGeneratedOutputPath)%(CompiledPath)')">
+        <RelativePath>%(_UnpackagedXamlToPublish.CompiledPath)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
   </Target>
 
 </Project>

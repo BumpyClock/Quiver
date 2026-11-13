@@ -12,6 +12,22 @@ public abstract class BrowserItemControl : UserControl
     protected abstract Button LaunchTarget { get; }
     protected abstract void UpdateItemBindings();
 
+    protected BrowserItemControl()
+    {
+        Loaded += (_, _) =>
+        {
+            RefreshSelectionState();
+            DispatcherQueue.TryEnqueue(RefreshSelectionState);
+        };
+        ActualThemeChanged += (_, _) => DispatcherQueue.TryEnqueue(RefreshSelectionState);
+    }
+
+    private void RefreshSelectionState()
+    {
+        VisualStateManager.GoToState(this, "Unselected", false);
+        if (IsSelected) VisualStateManager.GoToState(this, "Selected", false);
+    }
+
     public BrowserItemViewModel? BrowserItem
     {
         get => (BrowserItemViewModel?)GetValue(BrowserItemProperty);
@@ -45,8 +61,8 @@ public abstract class BrowserItemControl : UserControl
     public Visibility ShortcutVisibility => ShortcutNumber is >= 1 and <= 9 ? Visibility.Visible : Visibility.Collapsed;
     public Visibility ProfileBadgeVisibility => BrowserItem?.Profile is null ? Visibility.Collapsed : Visibility.Visible;
     public string? ToolTipText => BrowserItem?.AlternateLaunches is { Count: > 0 } launches
-        ? "Right-click for " + string.Join(", ", launches.Select(launch => launch.ItemName))
-        : null;
+        ? BrowserItem.Name + "\nRight-click for " + string.Join(", ", launches.Select(launch => launch.ItemName))
+        : BrowserItem?.Name;
 
     public event EventHandler<BrowserItemViewModel>? LaunchRequested;
     public event EventHandler<AlternateLaunchRequestedEventArgs>? AlternateLaunchRequested;

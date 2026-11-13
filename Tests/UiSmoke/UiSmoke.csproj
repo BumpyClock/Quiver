@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk" TreatAsLocalProperty="TargetFramework">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
@@ -34,7 +34,8 @@
     <Compile Include="../../Source/Quiver.App/Helpers/UriLauncher.cs" Link="UriLauncher.cs" />
     <Compile Include="../../Source/Quiver.App/Helpers/BackdropShapeLayer.cs" Link="BackdropShapeLayer.cs" />
     <Compile Include="../../Source/Quiver.App/Helpers/BackdropShape.cs" Link="BackdropShape.cs" />
-    <Compile Include="../../Source/Quiver.App/Controls/RadialLayout.cs" Link="RadialLayout.cs" />
+    <Compile Include="../../Source/Quiver.App/Controls/RadialMetrics.cs" Link="RadialMetrics.cs" />
     <Compile Include="../../Source/Quiver.App/Controls/ListMetrics.cs" Link="ListMetrics.cs" />
+    <Compile Include="../../Source/Quiver.App/Helpers/CursorPosition.cs" Link="CursorPosition.cs" />
   </ItemGroup>
 </Project>

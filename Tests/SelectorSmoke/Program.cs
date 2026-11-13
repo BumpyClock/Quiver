@@ -43,6 +43,11 @@ public sealed partial class SmokeApplication : Application
 
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
+        if (Environment.GetEnvironmentVariable(LifecycleChecks.MissingXamlVariable) == "1")
+        {
+            LifecycleChecks.RunMissingXamlChild(this);
+            return;
+        }
         SelectorWindow? window = null;
         SelectorWindow? coldListWindow = null;
         ServiceProvider? services = null;
@@ -52,6 +57,8 @@ public sealed partial class SmokeApplication : Application
             CliArgsChecks.Run();
             CheckMetrics();
             SelectorGeometryChecks.Run();
+            SelectorFitChecks.Run();
+            SelectorAddressChecks.Run();
             services = new ServiceCollection()
                 .AddSingleton<ISettingsService, TestSettings>()
                 .AddSingleton<IQuickViewService, TestQuickView>()
@@ -60,6 +67,36 @@ public sealed partial class SmokeApplication : Application
                 .BuildServiceProvider();
             typeof(Quiver.App.App).GetProperty(nameof(Quiver.App.App.Services))!.SetValue(null, services);
             window = new SelectorWindow();
+            window.ViewModel.Url = "https://github.com/BumpyClock/Quiver/pull/29";
+            if (Environment.GetEnvironmentVariable("QUIVER_SELECTOR_LIST_POLISH_ONLY") == "1")
+            {
+                await ListPolishChecks.RunAsync(window, (TestSettings)services.GetRequiredService<ISettingsService>());
+                File.WriteAllText(resultPath, "PASS: native List polish capture and opening checks.");
+                return;
+            }
+            if (Environment.GetEnvironmentVariable("QUIVER_SELECTOR_POLISH_ONLY") == "1")
+            {
+                await RadialPolishChecks.RunAsync(window, (TestSettings)services.GetRequiredService<ISettingsService>());
+                File.WriteAllText(resultPath, "PASS: radial polish checks.");
+                return;
+            }
+            if (Environment.GetEnvironmentVariable("QUIVER_SELECTOR_TEXT_SCALE_ONLY") == "1")
+            {
+                var settings = (TestSettings)services.GetRequiredService<ISettingsService>();
+                settings.UpdateAppSettings(new AppSettings { SelectorLayout = SelectorLayout.List });
+                window.ShowWindow();
+                await WaitForAsync(() => ((FrameworkElement)window.Content).XamlRoot is not null,
+                    "text-scale fixture has a loaded XAML root");
+                await ListTextScaleChecks.RunAsync(window, settings, directory: null);
+                File.WriteAllText(resultPath, "PASS: strict live List text-scale checks.");
+                return;
+            }
+            if (Environment.GetEnvironmentVariable("QUIVER_SELECTOR_LIST_NAVIGATION_ONLY") == "1")
+            {
+                await ListSelectorChecks.RunAsync(window, (TestSettings)services.GetRequiredService<ISettingsService>());
+                File.WriteAllText(resultPath, "PASS: List navigation checks.");
+                return;
+            }
             window.ViewModel.Url = "https://a-long-sharepoint-hostname-for-the-selector.example.com/document";
             var root = (FrameworkElement)window.Content;
             var loaded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -71,7 +108,6 @@ public sealed partial class SmokeApplication : Application
             window.AppWindow.Show(activateWindow: false);
             await loaded.Task.WaitAsync(TimeSpan.FromSeconds(5));
             var ring = (ItemsRepeater)root.FindName("BrowserRing");
-            // Window x:Bind initializes on activation; keep this test offscreen and inactive.
             ring.ItemsSource = window.ViewModel.Browsers;
             var first = (RadialBrowserItem)ring.GetOrCreateElement(0);
             var second = (RadialBrowserItem)ring.GetOrCreateElement(1);
@@ -79,13 +115,13 @@ public sealed partial class SmokeApplication : Application
             CheckSelectionAlignment();
             foreach (var item in new[] { first, second })
             {
-                var tile = (FrameworkElement)item.FindName("IconTile");
+                var tile = (FrameworkElement)item.FindName("IconSlot");
+                Check(item.FindName("IconSurface") is null, "radial logos have no surrounding icon plate");
                 var badge = (Border)item.FindName("ShortcutBadge");
                 var offset = badge.TransformToVisual(tile).TransformPoint(default);
-                Check(Math.Abs(offset.X + badge.ActualWidth / 2 - tile.ActualWidth / 2) <= 1 / root.XamlRoot.RasterizationScale
-                    && offset.Y >= 0 && offset.Y + badge.ActualHeight <= tile.ActualHeight,
-                    $"shortcut keycaps are centered inside the icon tiles (offset {offset.X},{offset.Y}; "
-                    + $"badge {badge.ActualWidth}x{badge.ActualHeight}; tile {tile.ActualWidth}x{tile.ActualHeight})");
+                double expectedX = ReferenceEquals(item, first) ? tile.ActualWidth - badge.ActualWidth - 4 : 4;
+                Check(Math.Abs(offset.X - expectedX) <= 0.01 && Math.Abs(offset.Y - 10) <= 0.01,
+                    $"paired shortcut keycaps face the flower center (offset {offset.X},{offset.Y})");
                 var shortcut = (TextBlock)item.FindName("ShortcutText");
                 Check(shortcut.Text == (ring.GetElementIndex(item) + 1).ToString(),
                     "integrated hints keep the browser's assigned number shortcut");
@@ -94,24 +130,27 @@ public sealed partial class SmokeApplication : Application
             Check(((Border)first.FindName("ShortcutBadge")).Visibility == Visibility.Collapsed,
                 "browsers without a number-key shortcut do not show a keycap");
             first.ShortcutNumber = 1;
-            foreach (var theme in new[] { ElementTheme.Dark, ElementTheme.Light, ElementTheme.Dark })
+            foreach (var theme in Enumerable.Range(0, 12).Select(index =>
+                index % 2 == 0 ? ElementTheme.Dark : ElementTheme.Light))
             {
                 root.RequestedTheme = theme;
                 root.UpdateLayout();
-                await Task.Delay(50);
                 var outline = (Microsoft.UI.Xaml.Shapes.Path)root.FindName("SelectionOutline");
                 var hub = (FontIcon)((Button)root.FindName("HubButton")).Content;
                 bool dark = theme == ElementTheme.Dark;
-                Check(IsDark(outline.Fill) == dark && IsDark(outline.Stroke) != dark
+                await WaitForAsync(() => IsDark(outline.Fill) == dark && IsDark(outline.Stroke) != dark
                     && IsDark(hub.Foreground) != dark,
                     "selection surface, outline, and hub follow live theme changes");
                 foreach (var item in new[] { first, second })
                 {
-                    Check(IsDark(((Border)item.FindName("IconSurface")).Background) == dark
-                        && IsDark(((Border)item.FindName("ShortcutBadge")).Background) == dark
+                    await WaitForAsync(() => IsDark(((Border)item.FindName("ShortcutBadge")).Background) == dark
                         && IsDark(((TextBlock)item.FindName("ShortcutText")).Foreground) != dark
                         && IsDark(((TextBlock)item.FindName("PetalName")).Foreground) != dark,
-                        "selected and unselected icon tiles, hints, and labels follow live theme changes");
+                        $"selected and unselected hints and labels follow live theme changes ({theme}, "
+                        + $"selected={item.IsSelected}, "
+                        + $"badge={((SolidColorBrush)((Border)item.FindName("ShortcutBadge")).Background).Color}, "
+                        + $"shortcut={((SolidColorBrush)((TextBlock)item.FindName("ShortcutText")).Foreground).Color}, "
+                        + $"label={((SolidColorBrush)((TextBlock)item.FindName("PetalName")).Foreground).Color})");
                 }
             }
             var highContrast = (ResourceDictionary)((FrameworkElement)root.FindName("FlowerHost"))
@@ -156,6 +195,8 @@ public sealed partial class SmokeApplication : Application
             Check(ReferenceEquals(FocusManager.GetFocusedElement(root.XamlRoot), pill),
                 "stale browser focus notifications do not steal focus from link options");
             Check(first.IsSelected && !second.IsSelected, "stale focus does not replace the selected browser");
+            Check(((Microsoft.UI.Xaml.Shapes.Path)root.FindName("SelectionOutline")).StrokeThickness == 0,
+                "link-options focus keeps browser selection fill without a second focus-like outline");
             int before = focusChanges;
             await Task.Delay(100);
             Check(focusChanges == before, "focus stays on link options without new input");
@@ -163,11 +204,16 @@ public sealed partial class SmokeApplication : Application
             second.FocusItem(FocusState.Keyboard);
             await CheckSettledAsync(second);
             var testSettings = (TestSettings)services.GetRequiredService<ISettingsService>();
+            await RadialPolishChecks.RunAsync(window, testSettings);
             await ListSelectorChecks.RunAsync(window, testSettings);
+            await SelectorFitChecks.RunAsync(window, testSettings);
+            await ListPolishChecks.RunChecksAsync(window, testSettings);
+            await SelectorAddressChecks.RunAsync(window, testSettings);
             testSettings.UpdateAppSettings(new AppSettings { SelectorLayout = SelectorLayout.List });
             coldListWindow = new SelectorWindow();
             await ListSelectorChecks.CheckColdOpeningAsync(coldListWindow);
-            File.WriteAllText(resultPath, "PASS: radial focus and list selector checks.");
+            LifecycleChecks.CheckFailedInitializationShutdown();
+            File.WriteAllText(resultPath, "PASS: lifecycle, fit fallback, radial focus, polish, immediate opening, list selector, and list polish checks.");
             Console.WriteLine(File.ReadAllText(resultPath));
 
             static bool IsDark(Brush brush)
@@ -208,8 +254,8 @@ public sealed partial class SmokeApplication : Application
                     position.Y + item.ActualHeight / 2);
                 var geometry = (PathGeometry)outline.Data;
                 var arc = (ArcSegment)geometry.Figures[0].Segments[0];
-                Check(Math.Abs(arc.Size.Width + outline.StrokeThickness / 2 - item.ActualWidth / 2) < 0.01,
-                    "selection stroke fits exactly within the browser circle");
+                Check(Math.Abs(item.ActualWidth / 2 - arc.Size.Width - outline.StrokeThickness / 2 - 2) < 0.01,
+                    "selection stroke leaves a concentric two-DIP rim inside the browser circle");
                 var start = geometry.Figures[0].StartPoint;
                 var end = arc.Point;
                 Check(Math.Abs(Math.Sqrt(Math.Pow(start.X - center.X, 2) + Math.Pow(start.Y - center.Y, 2))
@@ -229,10 +275,7 @@ public sealed partial class SmokeApplication : Application
         }
         finally
         {
-            var app = typeof(Quiver.App.App);
-            var shuttingDown = app.GetNestedType("AppState", BindingFlags.NonPublic)!.GetNestedType("ShuttingDown")!;
-            app.GetField("state", BindingFlags.Static | BindingFlags.NonPublic)!
-                .SetValue(null, Activator.CreateInstance(shuttingDown));
+            EnterShutdown();
             if (coldListWindow is not null)
             {
                 coldListWindow.Content = null;
@@ -246,6 +289,14 @@ public sealed partial class SmokeApplication : Application
             services?.Dispose();
             Exit();
         }
+    }
+
+    internal static void EnterShutdown()
+    {
+        var app = typeof(Quiver.App.App);
+        var shuttingDown = app.GetNestedType("AppState", BindingFlags.NonPublic)!.GetNestedType("ShuttingDown")!;
+        app.GetField("state", BindingFlags.Static | BindingFlags.NonPublic)!
+            .SetValue(null, Activator.CreateInstance(shuttingDown));
     }
 
     internal static async Task WaitForAsync(Func<bool> condition, string name)
@@ -270,9 +321,13 @@ public sealed partial class SmokeApplication : Application
             "two browsers occupy one row without an empty square viewport");
         Check(pair.PillTop - pair.FlowerTop - pair.FlowerHeight == RadialMetrics.PillGap,
             "link options sit directly below the visible browser petals");
-        Check(pair.RingRadius == 58 && RadialMetrics.For(4).RingRadius == 64
-            && Math.Abs(RadialMetrics.For(6).RingRadius - 80) < 0.0001,
-            "ink stamp ring radii match the 2, 4, and 6 browser concept");
+        Check(pair.RingRadius == 58, "two-browser placement remains compact");
+        foreach (int count in Enumerable.Range(3, 8))
+        {
+            var spaced = RadialMetrics.For(count);
+            Check(spaced.RingRadius >= 72 && 2 * spaced.RingRadius * Math.Sin(Math.PI / count) >= 92 - 0.0001,
+                "radial centers reserve room for neighboring labels and selection ink");
+        }
         foreach (int count in new[] { 2, 3, 4, 6, 10 })
         {
             var metrics = RadialMetrics.For(count);
@@ -293,8 +348,8 @@ public sealed partial class SmokeApplication : Application
                     "every browser petal fits inside its visible host");
                 var figure = metrics.SelectionGeometry(index).Figures[0];
                 var arc = (ArcSegment)figure.Segments[0];
-                Check(Math.Abs(arc.Size.Width - 51) < 0.0001,
-                    "selected petal includes the stroke inside its 52 DIP radius");
+                Check(Math.Abs(arc.Size.Width - 49) < 0.0001,
+                    "selected petal leaves a two-DIP plate rim beyond its stroke");
                 if (count > 1)
                 {
                     var hubArc = (ArcSegment)figure.Segments[2];
