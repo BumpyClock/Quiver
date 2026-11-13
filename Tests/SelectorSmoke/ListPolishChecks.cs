@@ -89,7 +89,7 @@ internal static partial class ListPolishChecks
                 "List opens opaque and unscaled without an entrance animation");
             Check(ReferenceEquals(ring.ItemsSource, window.ViewModel.Browsers)
                 && ring.TryGetElement(0) is ListBrowserItem first && first.ActualHeight == window.ListGeometry.Row,
-                "List returns from ShowWindow with bound, arranged rows");
+                FormattableString.Invariant($"List returns from ShowWindow with bound, arranged rows (row0 {(ring.TryGetElement(0) as FrameworkElement)?.ActualHeight}, metric {window.ListGeometry.Row}, scrollViewport {((ScrollViewer)root.FindName("BrowserScroll")).ViewportHeight})"));
             Check(DwmFlush() >= 0, "opening compositor flush succeeds");
             double flushed = clock.Elapsed.TotalMilliseconds;
             double rendered;
@@ -174,8 +174,17 @@ internal static partial class ListPolishChecks
                     if (count == 30)
                     {
                         Check(window.NavigateSelection(VirtualKey.Up), "production Up wraps to last row");
-                        await SmokeApplication.WaitForAsync(() => ring.TryGetElement(29) is ListBrowserItem { IsSelected: true }
-                            && scroll.VerticalOffset > 0, "long List reveals its final target");
+                        try
+                        {
+                            await SmokeApplication.WaitForAsync(() => ring.TryGetElement(29) is ListBrowserItem { IsSelected: true }
+                                && scroll.VerticalOffset > 0, "long List reveals its final target");
+                        }
+                        catch (Exception error)
+                        {
+                            throw new Exception(FormattableString.Invariant(
+                                $"{error.Message} (offset {scroll.VerticalOffset}, extent {scroll.ExtentHeight}, realized {ring.TryGetElement(29) is not null}, ")
+                                + $"selected {ring.TryGetElement(29) is ListBrowserItem { IsSelected: true }}, focus {FocusManager.GetFocusedElement(root.XamlRoot)?.GetType().Name})");
+                        }
                         var last = (ListBrowserItem)ring.TryGetElement(29);
                         var point = last.TransformToVisual(scroll).TransformPoint(default);
                         Check(point.Y >= -0.01 && point.Y + last.ActualHeight <= scroll.ViewportHeight + 0.01,

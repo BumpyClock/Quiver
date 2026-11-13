@@ -230,7 +230,9 @@ public sealed partial class SelectorWindow : Window
 
     internal ListMetrics ListGeometry => listMetrics;
 
-    internal ListBrowserItem ListRowProbe { get; } = new()
+    internal ListBrowserItem ListRowProbe { get; private set; } = CreateListRowProbe();
+
+    private static ListBrowserItem CreateListRowProbe() => new()
     {
         BrowserItem = new BrowserItemViewModel(new Browser("Ag", string.Empty), new BrowserProfile(string.Empty, "Ag", null)),
         ShortcutNumber = 1,
@@ -530,7 +532,11 @@ public sealed partial class SelectorWindow : Window
     }
 
     private void UiSettings_TextScaleFactorChanged(UISettings sender, object args)
-        => DiscRoot.DispatcherQueue.TryEnqueue(QueueGeometryUpdate);
+        => DiscRoot.DispatcherQueue.TryEnqueue(() =>
+        {
+            ListRowProbe = CreateListRowProbe();
+            QueueGeometryUpdate();
+        });
 
     private void DiscRoot_ActualThemeChanged(FrameworkElement sender, object args)
         => backdropLayer.SetTheme(DiscRoot.ActualTheme != ElementTheme.Light);

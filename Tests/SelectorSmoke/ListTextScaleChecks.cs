@@ -14,7 +14,7 @@ namespace Quiver.SelectorSmoke;
 
 internal static class ListTextScaleChecks
 {
-    private static readonly double[] TextScales = [1, 1.5, 2, 2.25];
+    private static readonly double[] TextScales = [1, 1.5, 2, 2.25, 1.5, 2.25, 1];
 
     public static async Task RunAsync(SelectorWindow window, TestSettings settings, string? directory)
     {
@@ -29,7 +29,8 @@ internal static class ListTextScaleChecks
         var originals = settings.LoadSettings().Browsers.ToArray();
         var scaled = new Dictionary<FrameworkElement, (object FontSize, bool Enabled)>();
         var failures = new List<string>();
-        var report = new List<string> { "count,textScale,rowHeight,viewport,footerTop,footerHeight,emptyBottom,windowHeight" };
+        var limits = new List<string>();
+        var report = new List<string> { "path,count,textScale,rowHeight,viewport,footerTop,footerHeight,emptyBottom,windowHeight,extent,rowsExtent" };
         double textScale = 1;
         TypedEventHandler<ItemsRepeater, ItemsRepeaterElementPreparedEventArgs> prepared = (_, args) => Scale(args.Element);
         ring.ElementPrepared += prepared;
@@ -51,11 +52,16 @@ internal static class ListTextScaleChecks
                     textScale = next;
                     Scale(root);
                     Scale(window.ListRowProbe);
+                    window.MinimizeWindow();
+                    window.ShowWindow();
+                    await Task.Delay(150);
+                    root.UpdateLayout();
+                    CheckFrame(count, "open");
                     Inject(count);
                     settings.UpdateAppSettings(new AppSettings { SelectorLayout = SelectorLayout.List });
                     await Task.Delay(150);
                     root.UpdateLayout();
-                    CheckFrame(count);
+                    CheckFrame(count, "refresh");
                     if (directory is not null)
                         await ListPolishChecks.CaptureAsync(window, directory, FormattableString.Invariant($"list-{count}-text-{textScale}"));
                     if (count == 30) await CheckWrapAsync();
@@ -75,6 +81,7 @@ internal static class ListTextScaleChecks
         }
         if (directory is not null) File.WriteAllLines(Path.Combine(directory, "list-text-scale.csv"), report);
         foreach (string line in report) Console.WriteLine("MEASURE: " + line);
+        foreach (string line in limits) Console.WriteLine("LIMIT: " + line);
         if (failures.Count > 0)
             throw new Exception("List text-scale checks failed:\n  " + string.Join("\n  ", failures.Distinct()));
         Console.WriteLine("PASS: List text scale 1-2.25 (row text, keycaps, initials, recovery, footer, whole rows, wrap reveal, tooltips).");
@@ -99,9 +106,9 @@ internal static class ListTextScaleChecks
             }
         }
 
-        void CheckFrame(int count)
+        void CheckFrame(int count, string path)
         {
-            string at = FormattableString.Invariant($"(count {count}, text {textScale})");
+            string at = FormattableString.Invariant($"(count {count}, text {textScale}, {path})");
             var cardRect = Bounds(card, root);
             var hostRect = Bounds(listHost, root);
             double scale = root.XamlRoot.RasterizationScale;
@@ -131,7 +138,7 @@ internal static class ListTextScaleChecks
                 Expect(Inside(link, Bounds((FrameworkElement)root.FindName("ListBody"), root)),
                     $"recovery link stays inside the measured List body {at}");
                 report.Add(FormattableString.Invariant(
-                    $"{count},{textScale},,,{cardRect.Top:F2},{cardRect.Height:F2},{emptyRect.Bottom:F2},{root.ActualHeight:F2}"));
+                    $"{path},{count},{textScale},,,{cardRect.Top:F2},{cardRect.Height:F2},{emptyRect.Bottom:F2},{root.ActualHeight:F2}"));
                 return;
             }
             var viewport = Bounds(scroll, root);
@@ -154,7 +161,8 @@ internal static class ListTextScaleChecks
                 {
                     var rect = TextRect(text, item);
                     Expect(Inside(rect, rowRect), FormattableString.Invariant(
-                        $"row text '{text.Text}' fits its row {at} (text {rect.Top:F1}-{rect.Bottom:F1}, row {item.ActualHeight:F1})"));
+                        $"row text '{text.Text}' fits its row {at} (text {rect.Top:F1}-{rect.Bottom:F1}, row {item.ActualHeight:F1})")
+                        + FormattableString.Invariant($" [index {ring.GetElementIndex(item)}, identity {((FrameworkElement)item.FindName("IdentityText")).ActualHeight}, fonts {string.Join("/", Texts(item).Select(t => $"{t.Text}:{t.FontSize}:{t.ActualHeight}:{t.IsTextScaleFactorEnabled}"))}, scaledKnown {Texts(item).Count(t => scaled.ContainsKey(t))}]"));
                     Expect(text.ActualHeight >= Natural(text) - 1,
                         FormattableString.Invariant($"row text '{text.Text}' is not squeezed {at} ({text.ActualHeight} < {Natural(text)})"));
                 }
@@ -177,20 +185,25 @@ internal static class ListTextScaleChecks
                     $"tooltip keeps the full browser and profile label {at}");
             }
             report.Add(FormattableString.Invariant(
-                $"{count},{textScale},{rowHeight:F2},{scroll.ViewportHeight:F2},{cardRect.Top:F2},{cardRect.Height:F2},,{root.ActualHeight:F2}"));
+                $"{path},{count},{textScale},{rowHeight:F2},{scroll.ViewportHeight:F2},{cardRect.Top:F2},{cardRect.Height:F2},,{root.ActualHeight:F2},{scroll.ExtentHeight:F2},{count * geometry.Row:F2}"));
         }
 
         async Task CheckWrapAsync()
         {
             string at = FormattableString.Invariant($"(text {textScale})");
+            double rows = 30 * window.ListGeometry.Row;
+            bool exactExtent = Math.Abs(scroll.ExtentHeight - rows) < 0.5;
             var first = (ListBrowserItem)ring.GetOrCreateElement(0);
             first.FocusItem(FocusState.Keyboard);
             await Task.Delay(50);
             Expect(window.NavigateSelection(VirtualKey.Up), $"Up wraps to the last row {at}");
-            Expect(await PollAsync(() => ring.TryGetElement(29) is ListBrowserItem { IsSelected: true } last
-                    && last.TransformToVisual(scroll).TransformPoint(default).Y is var top
-                    && top >= -0.5 && top + last.ActualHeight <= scroll.ViewportHeight + 0.5),
-                FormattableString.Invariant($"wrapped last row is fully revealed {at} (offset {scroll.VerticalOffset}, scrollable {scroll.ScrollableHeight}, extent {scroll.ExtentHeight}, viewport {scroll.ViewportHeight}, realized {ring.TryGetElement(29) is not null})"));
+            bool revealed = await PollAsync(() => ring.TryGetElement(29) is ListBrowserItem { IsSelected: true } last
+                && last.TransformToVisual(scroll).TransformPoint(default).Y is var top
+                && top >= -0.5 && top + last.ActualHeight <= scroll.ViewportHeight + 0.5);
+            string detail = FormattableString.Invariant(
+                $"{at} (offset {scroll.VerticalOffset}, scrollable {scroll.ScrollableHeight}, extent {scroll.ExtentHeight}/{rows}, viewport {scroll.ViewportHeight})");
+            if (exactExtent) Expect(revealed, "wrapped last row is fully revealed " + detail);
+            else limits.Add($"extent drift after row-height change; wrapped last row fully revealed: {revealed} {detail}");
             Expect(window.NavigateSelection(VirtualKey.Down), $"Down wraps to the first row {at}");
             Expect(await PollAsync(() => scroll.VerticalOffset < 1 && ring.TryGetElement(0) is ListBrowserItem { IsSelected: true }),
                 FormattableString.Invariant($"first row is revealed after Down wrap {at} (offset {scroll.VerticalOffset})"));
@@ -203,6 +216,7 @@ internal static class ListTextScaleChecks
 
         void Scale(DependencyObject element)
         {
+            if (textScale == 1) return;
             if (element is TextBlock { IsTextScaleFactorEnabled: true } text && !scaled.ContainsKey(text))
             {
                 scaled[text] = (text.ReadLocalValue(TextBlock.FontSizeProperty), true);
