@@ -6,13 +6,14 @@ namespace Quiver.SelectorSmoke;
 
 internal static class ListMeasurementChecks
 {
-    private static readonly ListMetrics[] Measured =
+    internal static readonly ListMetrics[] Measured =
         [ListMetrics.Compact, new(68, 88, 72), new(84, 104, 92), new(92, 112, 100)];
 
     public static void Run()
     {
         CheckBoundaryScale();
         foreach (var metrics in Measured) CheckAllocation(metrics);
+        ConstrainedListChecks.Run();
         Console.WriteLine("PASS: measured List geometry keeps whole rows, recovery and footer apart across DPI 97-480, including 101 DPI at 454px.");
     }
 
@@ -23,7 +24,7 @@ internal static class ListMeasurementChecks
         int width = CursorPosition.NativeLength(ListMetrics.WindowWidth, scale);
         int pixels = CursorPosition.NativeLength(compact.Height(6), scale);
         var frame = compact.Frame(new SizeInt32(width, pixels), scale, 6);
-        Check(pixels == 454 && frame.Body == 6 * compact.Row,
+        Check(pixels == 454 && !frame.Scrolls && frame.Body == 6 * compact.Row,
             FormattableString.Invariant($"101-DPI 454px List allocates six whole rows in double precision ({pixels}px, {frame.Body})"));
         Check(compact.Viewport(pixels, (float)scale) == 5 * compact.Row,
             "narrowing the 101-DPI scale to float loses the sixth row, so allocation must stay double");
@@ -46,16 +47,19 @@ internal static class ListMeasurementChecks
                 var frame = metrics.Frame(size, scale, count);
                 string at = FormattableString.Invariant($"(row {metrics.Row}, count {count}, DPI {dpi}, {bounds.Height}px)");
                 double expected = count == 0 ? metrics.Empty : count * metrics.Row;
-                Check(frame.Body == expected, $"rounded native List height keeps the measured body {at}");
-                Check(ListMetrics.ShadowMargin + ListMetrics.Padding + frame.Body + ListMetrics.FooterGap <= frame.FooterTop + 0.5 / scale + 1e-9,
+                Check(!frame.Scrolls && frame.Body == expected, $"rounded native List height keeps the measured body and pinned footer {at}");
+                Check(frame.Body + ListMetrics.FooterGap <= frame.FooterTop + 0.5 / scale + 1e-9,
                     $"footer starts below the measured body and gap {at}");
-                Check(Math.Abs(frame.FooterTop + metrics.Footer + ListMetrics.Padding - ListMetrics.ShadowMargin - frame.Height) < 1e-9,
-                    $"footer fits inside the List frame {at}");
-                if (count == 0) continue;
+                Check(Math.Abs(frame.FooterTop + metrics.Footer + 2 * ListMetrics.Padding - frame.Height) < 1e-9
+                    && frame.Extent == frame.Height, $"footer fits inside the List frame {at}");
                 var shortened = metrics.Frame(new SizeInt32(size.Width, size.Height - 1), scale, count);
-                Check(shortened.Body == (count - 1) * metrics.Row
-                    && CursorPosition.NativeLength(nonBody + shortened.Body, scale) <= size.Height - 1,
-                    $"a window one pixel short loses only the clipped row {at}");
+                if (count <= 1)
+                    Check(shortened.Scrolls && shortened.Body == expected && shortened.FooterTop == expected + ListMetrics.FooterGap,
+                        $"a window one pixel short of the pinned frame scrolls the whole frame and keeps the body {at}");
+                else
+                    Check(!shortened.Scrolls && shortened.Body == (count - 1) * metrics.Row
+                        && CursorPosition.NativeLength(nonBody + shortened.Body, scale) <= size.Height - 1,
+                        $"a window one pixel short loses only the clipped row {at}");
             }
         }
     }

@@ -7,7 +7,17 @@ using Windows.Graphics;
 
 namespace Quiver.App.Controls;
 
-internal readonly record struct ListFrame(double Width, double Height, double Body, double FooterTop);
+internal readonly record struct ListFrame(double Width, double Height, double Body, double FooterTop, double Footer, bool Scrolls)
+{
+    public double Extent => Scrolls ? FooterTop + Footer + 2 * ListMetrics.Padding : Height;
+
+    public double Offset(double current, double top, double bottom)
+    {
+        double lowest = bottom + 2 * ListMetrics.Padding - Height;
+        double offset = lowest <= top ? Math.Clamp(current, lowest, top) : top;
+        return Math.Clamp(offset, 0, Math.Max(0, Extent - Height));
+    }
+}
 
 internal readonly record struct ListMetrics(double Row, double Empty, double Footer)
 {
@@ -46,9 +56,14 @@ internal readonly record struct ListMetrics(double Row, double Empty, double Foo
 
     public ListFrame Frame(SizeInt32 window, double scale, int count)
     {
-        double height = window.Height / scale;
-        return new(Math.Max(0, window.Width / scale - 2 * ShadowMargin), Math.Max(0, height - 2 * ShadowMargin),
-            count == 0 ? Empty : Viewport(window.Height, scale), height - ShadowMargin - Padding - Footer);
+        double width = Math.Max(0, window.Width / scale - 2 * ShadowMargin);
+        double height = Math.Max(0, window.Height / scale - 2 * ShadowMargin);
+        double content = Math.Max(0, height - 2 * Padding);
+        double body = count == 0 ? Empty : Viewport(window.Height, scale);
+        if (body > 0 && CursorPosition.NativeLength(NonBodyHeight + body, scale) <= window.Height)
+            return new(width, height, body, content - Footer, Footer, false);
+        body = count == 0 ? Empty : Math.Clamp(Math.Floor(content / Row), 1, count) * Row;
+        return new(width, height, body, body + FooterGap, Footer, true);
     }
 
     public static Rect Bounds(double windowWidth, double windowHeight) => new(ShadowMargin, ShadowMargin,

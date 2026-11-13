@@ -46,6 +46,7 @@ public sealed partial class SelectorWindow : Window
     private bool resizeQueued;
     private RadialMetrics metrics;
     private ListMetrics listMetrics = ListMetrics.Compact;
+    private ListFrame listFrame;
     private SelectorLayout layout;
     private CursorSnapshot openingCursor;
     private ItemsRepeater Items => layout == SelectorLayout.List ? BrowserList : BrowserRing;
@@ -173,7 +174,11 @@ public sealed partial class SelectorWindow : Window
         AppWindow.MoveAndResize(bounds);
         Bindings.Update();
         UpdateShape();
-        if (layout == SelectorLayout.List) BrowserScroll.ChangeView(null, 0, null, true);
+        if (layout == SelectorLayout.List)
+        {
+            BrowserScroll.ChangeView(null, 0, null, true);
+            ListFrameScroll.ChangeView(null, 0, null, true);
+        }
         DiscRoot.UpdateLayout();
         AppWindow.Show();
         AppWindow.MoveAndResize(bounds);
@@ -254,12 +259,25 @@ public sealed partial class SelectorWindow : Window
 
     private void ApplyLayout()
     {
+        if (layout == SelectorLayout.Radial) PlaceNamePill(DiscRoot);
         SelectionOutline.Data = null;
         FlowerHost.Visibility = layout == SelectorLayout.Radial ? Visibility.Visible : Visibility.Collapsed;
         ListHost.Visibility = layout == SelectorLayout.List ? Visibility.Visible : Visibility.Collapsed;
         backdropLayer.SetVisible(layout == SelectorLayout.Radial);
         if (layout == SelectorLayout.List) ApplyListLayout();
         else ApplyRadialLayout();
+    }
+
+    private void PlaceNamePill(Panel parent)
+    {
+        if (parent.Children.Contains(NamePill)) return;
+        var focus = NamePill.FocusState;
+        (ReferenceEquals(parent, DiscRoot) ? ListFrameContent : DiscRoot).Children.Remove(NamePill);
+        if (ReferenceEquals(parent, DiscRoot)) DiscRoot.Children.Insert(DiscRoot.Children.IndexOf(FlowerHost) + 1, NamePill);
+        else parent.Children.Add(NamePill);
+        if (focus == FocusState.Unfocused) return;
+        DiscRoot.UpdateLayout();
+        NamePill.Focus(focus);
     }
 
     private void ApplyRadialLayout()
@@ -296,13 +314,28 @@ public sealed partial class SelectorWindow : Window
 
     private void SizeListHost(SizeInt32 size, double scale)
     {
-        var frame = listMetrics.Frame(size, scale, metrics.Count);
-        ListHost.Width = frame.Width;
-        ListHost.Height = frame.Height;
-        ListBody.Height = frame.Body;
-        BrowserScroll.MaxHeight = frame.Body;
-        NamePill.Width = Math.Max(0, frame.Width - 2 * ListMetrics.Padding);
-        NamePill.Margin = new Thickness(0, frame.FooterTop, 0, 0);
+        listFrame = listMetrics.Frame(size, scale, metrics.Count);
+        ListHost.Width = listFrame.Width;
+        ListHost.Height = listFrame.Height;
+        ListFrameContent.Height = listFrame.Extent;
+        ListBody.Height = listFrame.Body;
+        BrowserScroll.MaxHeight = listFrame.Body;
+        NamePill.Width = Math.Max(0, listFrame.Width - 2 * ListMetrics.Padding);
+        NamePill.Margin = new Thickness(0, listFrame.FooterTop + (listFrame.Scrolls ? 0 : ListMetrics.ShadowMargin + ListMetrics.Padding), 0, 0);
+        PlaceNamePill(listFrame.Scrolls ? ListFrameContent : DiscRoot);
+    }
+
+    private void RevealListFrame(double top, double bottom)
+    {
+        if (layout != SelectorLayout.List || !listFrame.Scrolls) return;
+        DiscRoot.UpdateLayout();
+        ListFrameScroll.ChangeView(null, listFrame.Offset(ListFrameScroll.VerticalOffset, top, bottom), null, true);
+    }
+
+    private void ListFrameTarget_GotFocus(object sender, RoutedEventArgs e)
+    {
+        if (ReferenceEquals(sender, NamePill)) RevealListFrame(listFrame.FooterTop, listFrame.FooterTop + listFrame.Footer);
+        else RevealListFrame(0, listFrame.Body);
     }
 
     private void UpdateShape()
@@ -419,6 +452,7 @@ public sealed partial class SelectorWindow : Window
         double offset = Math.Min(top, Math.Max(BrowserScroll.VerticalOffset,
             top + listMetrics.Row - BrowserScroll.ViewportHeight));
         BrowserScroll.ChangeView(null, offset, null, true);
+        RevealListFrame(0, listFrame.Body);
     }
 
     private void UpdatePill()

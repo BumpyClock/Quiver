@@ -66,9 +66,26 @@ internal static class ListTextScaleChecks
                     if (directory is not null)
                         await ListPolishChecks.CaptureAsync(window, directory, FormattableString.Invariant($"list-{count}-text-{textScale}"));
                     if (count == 30) await CheckWrapAsync();
+                    await ConstrainedListChecks.CheckAsync(window, count, textScale, () => Inject(count), Expect, directory);
+                    window.ShowWindow();
+                    Inject(count);
+                    await Task.Delay(150);
+                    root.UpdateLayout();
+                    CheckFrame(count, "restored");
+                    if (count == 30) await CheckWrapAsync();
                 }
                 window.MinimizeWindow();
             }
+            await ConstrainedListChecks.CheckLayoutSwitchAsync(window, settings, next =>
+            {
+                textScale = next;
+                Scale(root);
+                Scale(window.ListRowProbe);
+            }, () =>
+            {
+                Restore();
+                textScale = 1;
+            }, Expect);
         }
         finally
         {
@@ -119,9 +136,12 @@ internal static class ListTextScaleChecks
             var geometry = window.ListGeometry;
             var frame = geometry.Frame(window.AppWindow.Size, scale, count);
             var body = Bounds((FrameworkElement)root.FindName("ListBody"), root);
-            Expect(Math.Abs(body.Height - frame.Body) < 0.01 && Math.Abs(cardRect.Top - frame.FooterTop) < 0.51
+            double footerTop = ListMetrics.ShadowMargin + ListMetrics.Padding + frame.FooterTop;
+            Expect(!frame.Scrolls && ((ScrollViewer)root.FindName("ListFrameScroll")).VerticalOffset == 0,
+                $"normal-height List keeps the pinned footer without frame scrolling {at}");
+            Expect(Math.Abs(body.Height - frame.Body) < 0.01 && Math.Abs(cardRect.Top - footerTop) < 0.51
                 && Math.Abs(cardRect.Height - geometry.Footer) < 0.01,
-                FormattableString.Invariant($"native body and footer apply the double-scale List frame {at} (body {body.Height}/{frame.Body}, footer {cardRect.Top}/{frame.FooterTop})"));
+                FormattableString.Invariant($"native body and footer apply the double-scale List frame {at} (body {body.Height}/{frame.Body}, footer {cardRect.Top}/{footerTop})"));
             Expect(cardRect.Bottom <= hostRect.Bottom - 7.5 && hostRect.Bottom <= windowHeight - 19.5,
                 FormattableString.Invariant($"footer and List frame stay inside the native window {at} (card {cardRect.Bottom}, host {hostRect.Bottom}, window {windowHeight})"));
             foreach (var text in Texts(card))

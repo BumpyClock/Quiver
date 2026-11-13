@@ -61,7 +61,6 @@
         <Border
             x:Name="ListHost"
             Margin="0,20,0,0"
-            Padding="8"
             HorizontalAlignment="Center"
             VerticalAlignment="Top"
             Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}"
@@ -69,87 +68,99 @@
             Translation="0,0,16"
             UseLayoutRounding="True"
             Visibility="Collapsed">
+            <Border.Resources>
+                <ResourceDictionary>
+                    <ResourceDictionary.ThemeDictionaries>
+                        <ResourceDictionary x:Key="Light">
+                            <SolidColorBrush x:Key="ScrollBarPanningThumbBackground" Color="#495A6D" />
+                            <Color x:Key="ScrollBarPanningThumbBackgroundColor">#495A6D</Color>
+                            <SolidColorBrush x:Key="ScrollBarThumbFill" Color="#495A6D" />
+                        </ResourceDictionary>
+                        <ResourceDictionary x:Key="Dark">
+                            <SolidColorBrush x:Key="ScrollBarPanningThumbBackground" Color="#C3CBD6" />
+                            <Color x:Key="ScrollBarPanningThumbBackgroundColor">#C3CBD6</Color>
+                            <SolidColorBrush x:Key="ScrollBarThumbFill" Color="#C3CBD6" />
+                        </ResourceDictionary>
+                        <ResourceDictionary x:Key="HighContrast">
+                            <SolidColorBrush x:Key="ScrollBarPanningThumbBackground" Color="{ThemeResource SystemColorWindowTextColor}" />
+                            <StaticResource x:Key="ScrollBarPanningThumbBackgroundColor" ResourceKey="SystemColorWindowTextColor" />
+                            <SolidColorBrush x:Key="ScrollBarThumbFill" Color="{ThemeResource SystemColorWindowTextColor}" />
+                        </ResourceDictionary>
+                    </ResourceDictionary.ThemeDictionaries>
+                </ResourceDictionary>
+            </Border.Resources>
             <Border.Shadow>
                 <ThemeShadow />
             </Border.Shadow>
-            <Grid x:Name="ListBody" VerticalAlignment="Top">
-                <ScrollViewer
-                    x:Name="BrowserScroll"
-                    Padding="0,0,14,0"
-                    VerticalAlignment="Top"
-                    BringIntoViewOnFocusChange="False"
-                    HorizontalScrollBarVisibility="Disabled"
-                    VerticalScrollBarVisibility="Auto">
-                    <ScrollViewer.Resources>
-                        <ResourceDictionary>
-                            <ResourceDictionary.ThemeDictionaries>
-                                <ResourceDictionary x:Key="Light">
-                                    <SolidColorBrush x:Key="ScrollBarPanningThumbBackground" Color="#495A6D" />
-                                    <Color x:Key="ScrollBarPanningThumbBackgroundColor">#495A6D</Color>
-                                    <SolidColorBrush x:Key="ScrollBarThumbFill" Color="#495A6D" />
-                                </ResourceDictionary>
-                                <ResourceDictionary x:Key="Dark">
-                                    <SolidColorBrush x:Key="ScrollBarPanningThumbBackground" Color="#C3CBD6" />
-                                    <Color x:Key="ScrollBarPanningThumbBackgroundColor">#C3CBD6</Color>
-                                    <SolidColorBrush x:Key="ScrollBarThumbFill" Color="#C3CBD6" />
-                                </ResourceDictionary>
-                                <ResourceDictionary x:Key="HighContrast">
-                                    <SolidColorBrush x:Key="ScrollBarPanningThumbBackground" Color="{ThemeResource SystemColorWindowTextColor}" />
-                                    <StaticResource x:Key="ScrollBarPanningThumbBackgroundColor" ResourceKey="SystemColorWindowTextColor" />
-                                    <SolidColorBrush x:Key="ScrollBarThumbFill" Color="{ThemeResource SystemColorWindowTextColor}" />
-                                </ResourceDictionary>
-                            </ResourceDictionary.ThemeDictionaries>
-                        </ResourceDictionary>
-                    </ScrollViewer.Resources>
-                    <ItemsRepeater
-                        x:Name="BrowserList"
-                        ElementIndexChanged="BrowserRing_ElementIndexChanged"
-                        ElementPrepared="BrowserRing_ElementPrepared"
-                        ItemsSource="{x:Bind ViewModel.Browsers, Mode=OneWay}"
-                        TabFocusNavigation="Once">
-                        <ItemsRepeater.Layout>
-                            <UniformGridLayout
-                                x:Name="ListRowsLayout"
-                                ItemsStretch="Fill"
-                                MaximumRowsOrColumns="1"
-                                MinItemHeight="52"
-                                MinItemWidth="1"
-                                Orientation="Horizontal" />
-                        </ItemsRepeater.Layout>
-                        <ItemsRepeater.ItemTemplate>
-                            <DataTemplate x:DataType="viewModels:BrowserItemViewModel">
-                                <controls:ListBrowserItem BrowserItem="{x:Bind}" />
-                            </DataTemplate>
-                        </ItemsRepeater.ItemTemplate>
-                    </ItemsRepeater>
-                </ScrollViewer>
-                <StackPanel
-                    x:Name="EmptyListMessage"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center"
-                    Spacing="8"
-                    Visibility="Collapsed">
-                    <TextBlock
-                        HorizontalAlignment="Center"
-                        FontSize="12"
-                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                        Text="No visible browsers" />
-                    <HyperlinkButton
-                        x:Name="ManageBrowsersButton"
-                        MinHeight="0"
-                        Padding="2,0"
-                        HorizontalAlignment="Center"
-                        Click="ManageBrowsersBtnClick"
-                        FontSize="12"
-                        Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
-                        FocusVisualMargin="-3"
-                        FocusVisualPrimaryBrush="{ThemeResource AccentTextFillColorPrimaryBrush}"
-                        FocusVisualPrimaryThickness="2"
-                        FocusVisualSecondaryThickness="1">
-                        <TextBlock Text="Manage browsers" TextDecorations="Underline" />
-                    </HyperlinkButton>
-                </StackPanel>
-            </Grid>
+            <ScrollViewer
+                x:Name="ListFrameScroll"
+                BringIntoViewOnFocusChange="False"
+                HorizontalScrollBarVisibility="Disabled"
+                VerticalScrollBarVisibility="Auto">
+                <Grid
+                    x:Name="ListFrameContent"
+                    Padding="8"
+                    VerticalAlignment="Top">
+                    <Grid x:Name="ListBody" VerticalAlignment="Top">
+                        <ScrollViewer
+                            x:Name="BrowserScroll"
+                            Padding="0,0,14,0"
+                            VerticalAlignment="Top"
+                            BringIntoViewOnFocusChange="False"
+                            HorizontalScrollBarVisibility="Disabled"
+                            VerticalScrollBarVisibility="Auto">
+                            <ItemsRepeater
+                                x:Name="BrowserList"
+                                ElementIndexChanged="BrowserRing_ElementIndexChanged"
+                                ElementPrepared="BrowserRing_ElementPrepared"
+                                ItemsSource="{x:Bind ViewModel.Browsers, Mode=OneWay}"
+                                TabFocusNavigation="Once">
+                                <ItemsRepeater.Layout>
+                                    <UniformGridLayout
+                                        x:Name="ListRowsLayout"
+                                        ItemsStretch="Fill"
+                                        MaximumRowsOrColumns="1"
+                                        MinItemHeight="52"
+                                        MinItemWidth="1"
+                                        Orientation="Horizontal" />
+                                </ItemsRepeater.Layout>
+                                <ItemsRepeater.ItemTemplate>
+                                    <DataTemplate x:DataType="viewModels:BrowserItemViewModel">
+                                        <controls:ListBrowserItem BrowserItem="{x:Bind}" />
+                                    </DataTemplate>
+                                </ItemsRepeater.ItemTemplate>
+                            </ItemsRepeater>
+                        </ScrollViewer>
+                        <StackPanel
+                            x:Name="EmptyListMessage"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Spacing="8"
+                            Visibility="Collapsed">
+                            <TextBlock
+                                HorizontalAlignment="Center"
+                                FontSize="12"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="No visible browsers" />
+                            <HyperlinkButton
+                                x:Name="ManageBrowsersButton"
+                                MinHeight="0"
+                                Padding="2,0"
+                                HorizontalAlignment="Center"
+                                Click="ManageBrowsersBtnClick"
+                                GotFocus="ListFrameTarget_GotFocus"
+                                FontSize="12"
+                                Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                FocusVisualMargin="-3"
+                                FocusVisualPrimaryBrush="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                FocusVisualPrimaryThickness="2"
+                                FocusVisualSecondaryThickness="1">
+                                <TextBlock Text="Manage browsers" TextDecorations="Underline" />
+                            </HyperlinkButton>
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+            </ScrollViewer>
         </Border>
 
         <Grid
@@ -254,6 +265,7 @@
             FocusVisualPrimaryBrush="{ThemeResource AccentTextFillColorPrimaryBrush}"
             FocusVisualPrimaryThickness="2"
             FocusVisualSecondaryThickness="1"
+            GotFocus="ListFrameTarget_GotFocus"
             ToolTipService.ToolTip="{x:Bind ViewModel.Url, Mode=OneWay}">
             <Button.Resources>
                 <ResourceDictionary>
