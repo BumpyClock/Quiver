@@ -171,6 +171,21 @@ internal static class ConstrainedListChecks
             expect(window.NavigateSelection(VirtualKey.Down), $"arrow navigation returns from the footer to the rows {at}");
             expect(await RowVisibleAsync(0), $"rows are revealed again after footer focus {at}");
         }
+        if (count == 0 && textScale >= 2)
+        {
+            double available = (window.ListGeometry.Empty + manage.ActualHeight) / 2;
+            int pixels = (int)Math.Floor((2 * (ListMetrics.ShadowMargin + ListMetrics.Padding) + available) * raster);
+            window.ShowWindow(new CursorSnapshot(new PointInt32(400, pixels / 2), new RectInt32(0, 0, 3840, pixels), raster));
+            inject();
+            await Task.Delay(150);
+            root.UpdateLayout();
+            expect(window.ListGeometry.Empty > Visible().Height && manage.ActualHeight <= Visible().Height,
+                $"tiny recovery fixture has an oversized body but a fitting recovery link (text {textScale}, empty {window.ListGeometry.Empty}, link {manage.ActualHeight}, viewport {Visible().Height}, window {window.AppWindow.Size.Height})");
+            card.Focus(FocusState.Keyboard);
+            manage.Focus(FocusState.Keyboard);
+            expect(await VisibleAsync(manage), $"the recovery link itself is fully revealed inside an oversized body at text {textScale}");
+            await CaptureAsync("tiny-recovery");
+        }
         card.Focus(FocusState.Programmatic);
 
         async Task CaptureAsync(string target)
@@ -221,6 +236,27 @@ internal static class ConstrainedListChecks
         var flower = (FrameworkElement)root.FindName("FlowerHost");
         double raster = root.XamlRoot.RasterizationScale;
         var browsers = settings.LoadSettings().Browsers;
+        settings.UpdateAppSettings(new AppSettings { SelectorLayout = SelectorLayout.List });
+        window.ShowWindow(CursorPosition.Capture() with { WorkArea = null });
+        await Task.Delay(150);
+        double normalRow = window.ListGeometry.Row;
+        card.Focus(FocusState.Keyboard);
+        expect(window.NavigateSelection(VirtualKey.Up), "production navigation enters the last row before live text growth");
+        expect(await PollAsync(LastRowVisible), "the last row is focused and revealed before live text growth");
+        scaleText(2.25);
+        settings.UpdateAppSettings(new AppSettings { SelectorLayout = SelectorLayout.List });
+        expect(await PollAsync(() => window.ListGeometry.Row > normalRow && LastRowVisible()),
+            "live text growth keeps the same focused last row fully revealed without navigation");
+        restoreText();
+        settings.UpdateAppSettings(new AppSettings { SelectorLayout = SelectorLayout.List });
+        expect(await PollAsync(() => window.ListGeometry.Row == normalRow && LastRowVisible()),
+            "restoring text keeps the focused last row fully revealed without navigation");
+        var shortSize = window.AppWindow.Size;
+        shortSize.Height = (int)Math.Floor(300 * raster);
+        window.AppWindow.Resize(shortSize);
+        expect(await PollAsync(() => Math.Abs(((FrameworkElement)root.FindName("ListHost")).Height
+                - (shortSize.Height / raster - 2 * ListMetrics.ShadowMargin)) < 0.51 && LastRowVisible()),
+            "live viewport shrink keeps the focused last row fully revealed without navigation");
         while (browsers.Count > 2) browsers.RemoveAt(browsers.Count - 1);
         settings.UpdateAppSettings(new AppSettings { SelectorLayout = SelectorLayout.List });
         int pixels = (int)Math.Floor(200 * raster);
@@ -279,6 +315,18 @@ internal static class ConstrainedListChecks
             "reopening on the short work area moves the footer back into the frame and reveals it");
         settings.UpdateAppSettings(new AppSettings { SelectorLayout = SelectorLayout.List });
         window.MinimizeWindow();
+
+        bool LastRowVisible()
+        {
+            var ring = (ItemsRepeater)root.FindName("BrowserList");
+            var scroll = (ScrollViewer)root.FindName("BrowserScroll");
+            var host = Bounds((FrameworkElement)root.FindName("ListHost"), root);
+            return ring.TryGetElement(browsers.Count - 1) is ListBrowserItem { IsSelected: true } row
+                && ReferenceEquals(FocusManager.GetFocusedElement(root.XamlRoot), row.FindName("LaunchButton"))
+                && Inside(Bounds(row, scroll), new Rect(0, 0, scroll.ActualWidth, scroll.ViewportHeight))
+                && Inside(Bounds(row, root), new Rect(host.X, host.Y + ListMetrics.Padding, host.Width,
+                    Math.Max(0, host.Height - 2 * ListMetrics.Padding)));
+        }
     }
 
     private static async Task<bool> PollAsync(Func<bool> condition)

@@ -49,7 +49,7 @@ internal readonly record struct ListMetrics(double Row, double Empty, double Foo
 
     public double Viewport(int windowPixels, double scale)
     {
-        int rows = Math.Max(0, (int)Math.Floor(((windowPixels + 0.5) / scale - NonBodyHeight) / Row));
+        int rows = Math.Max(0, (int)Math.Ceiling(((windowPixels + 0.5) / scale - NonBodyHeight) / Row));
         while (rows > 0 && CursorPosition.NativeLength(NonBodyHeight + rows * Row, scale) > windowPixels) rows--;
         return rows * Row;
     }

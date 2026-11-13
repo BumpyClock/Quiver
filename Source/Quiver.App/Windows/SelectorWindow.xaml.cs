@@ -210,6 +210,7 @@ public sealed partial class SelectorWindow : Window
             AppWindow.MoveAndResize(openingCursor.Resize(previous, Geometry, AppWindow.Position));
         }
         UpdateShape();
+        RevealFocusedListTarget();
     }
 
     private bool ApplyMetrics()
@@ -332,10 +333,20 @@ public sealed partial class SelectorWindow : Window
         ListFrameScroll.ChangeView(null, listFrame.Offset(ListFrameScroll.VerticalOffset, top, bottom), null, true);
     }
 
-    private void ListFrameTarget_GotFocus(object sender, RoutedEventArgs e)
+    private void ListFrameTarget_GotFocus(object sender, RoutedEventArgs e) => RevealFocusedListTarget();
+
+    private void RevealFocusedListTarget()
     {
-        if (ReferenceEquals(sender, NamePill)) RevealListFrame(listFrame.FooterTop, listFrame.FooterTop + listFrame.Footer);
-        else RevealListFrame(0, listFrame.Body);
+        if (layout != SelectorLayout.List) return;
+        DiscRoot.UpdateLayout();
+        int index = GetFocusedItemIndex();
+        if (index >= 0) RevealListItem(index);
+        else if (FocusManager.GetFocusedElement(DiscRoot.XamlRoot) is FrameworkElement target
+            && (ReferenceEquals(target, NamePill) || ReferenceEquals(target, ManageBrowsersButton)))
+        {
+            double top = target.TransformToVisual(ListFrameContent).TransformPoint(default).Y - ListMetrics.Padding;
+            RevealListFrame(top, top + target.ActualHeight);
+        }
     }
 
     private void UpdateShape()
@@ -511,7 +522,7 @@ public sealed partial class SelectorWindow : Window
         if (focused >= 0 && sender is BrowserItemControl item && Items.GetElementIndex(item) == focused)
         {
             Select(focused);
-            if (layout == SelectorLayout.List) RevealListItem(focused);
+            RevealFocusedListTarget();
         }
     }
 

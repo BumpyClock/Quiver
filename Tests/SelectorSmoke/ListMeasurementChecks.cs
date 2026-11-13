@@ -30,6 +30,14 @@ internal static class ListMeasurementChecks
             "narrowing the 101-DPI scale to float loses the sixth row, so allocation must stay double");
         Check(compact.Frame(new SizeInt32(width, pixels - 1), scale, 6).Body == 5 * compact.Row,
             "a 101-DPI window one pixel short gains no clipped row");
+        var enlarged = new ListMetrics(84, 104, 92);
+        scale = 100 / 96.0;
+        width = CursorPosition.NativeLength(ListMetrics.WindowWidth, scale);
+        Check(CursorPosition.NativeLength(enlarged.Height(4), scale) == 512
+            && enlarged.Frame(new SizeInt32(width, 512), scale, 4).Body == 4 * enlarged.Row,
+            "a 100-DPI half-pixel rounding boundary retains all four enlarged rows");
+        Check(enlarged.Frame(new SizeInt32(width, 511), scale, 4).Body == 3 * enlarged.Row,
+            "the 100-DPI half-pixel boundary does not admit a genuinely clipped row");
     }
 
     private static void CheckAllocation(ListMetrics metrics)
@@ -39,7 +47,7 @@ internal static class ListMeasurementChecks
         for (int dpi = 97; dpi <= 480; dpi++)
         {
             double scale = dpi / 96.0;
-            for (int count = 0; count == 0 || metrics.Height(count) > metrics.Height(count - 1); count++)
+            for (int count = 0; count <= 1 || metrics.Height(count) > metrics.Height(count - 1); count++)
             {
                 var bounds = CursorPosition.CalculateBounds(ListMetrics.WindowWidth, metrics.Height(count),
                     ListMetrics.Anchor, new PointInt32(0, 0), area, scale, SelectorPlacement.BesideCursor);

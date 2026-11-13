@@ -234,8 +234,10 @@ The one-column uniform virtualizing layout and its explicit total height use tha
 preventing stale estimated scroll extents after live text-size changes. Allocation keeps double precision
 through the 101-DPI boundary; graphics conversion happens afterward. A second frame scroller activates
 only when the pinned footer plus one whole row or recovery cannot fit. In that mode the existing footer
-moves into the frame; its geometry owns the extent and focus-reveal offsets. Restoring space or switching
-to Radial returns the footer to its original root slot and preserves its focus kind.
+moves into the frame; its geometry owns the extent and focus-reveal offsets. Live layout changes and
+focus events share one post-layout actual-focus reveal. Recovery reveal uses the link's own bounds,
+not the possibly oversized empty body. Restoring space or switching to Radial returns the footer to
+its original root slot and preserves its focus kind.
 Both layouts use XAML acrylic and shadows in the same visual tree as their controls. Neither replays
 an entrance animation or shows a separately committed native plate. Cold-opening checks
 verify bound, arranged rows and full-opacity, unscaled content without an active entrance animation.
@@ -284,7 +286,8 @@ navigation and repeated-wrap fixture. `QUIVER_SELECTOR_TEXT_SCALE_ONLY=1` runs s
 checks from 1x through 2.25x, including live increases/decreases, exact scroll extents, row text, keycaps,
 recovery/footer separation and full wrap reveal. Profile fixtures are restored and required after every
 reopen and visible constrained refresh. Constrained checks also exercise recovery/footer focus, Tab,
-frame scrolling, return to normal size and List/Radial switching in simulated 200 and 226-DIP work areas
+frame scrolling, focused last-row retention through text growth/shrink and viewport shrink, recovery
+links in oversized bodies, return to normal size and List/Radial switching in simulated 200 and 226-DIP work areas
 at the actual native raster scale. Compiled geometry covers the corresponding 600 and 680-pixel work
 areas at 300%. Native checks do not change Windows settings or qualify real 300% desktop appearance,
 the actual global accessibility-setting event path, or mouse-wheel chaining between the two scrollers.
