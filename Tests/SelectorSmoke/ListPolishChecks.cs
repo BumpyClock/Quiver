@@ -35,7 +35,9 @@ internal static partial class ListPolishChecks
 
     public static async Task RunChecksAsync(SelectorWindow window, TestSettings settings)
     {
+        ListMeasurementChecks.Run();
         await CheckFixturesAsync(window, settings, directory: null, edge: null, chrome: null);
+        await ListTextScaleChecks.RunAsync(window, settings, directory: null);
         Console.WriteLine("PASS: List polish fixtures (profiles, artwork, gutter, whole rows, address, recovery focus, rounding).");
     }
 
@@ -46,6 +48,7 @@ internal static partial class ListPolishChecks
         Directory.CreateDirectory(directory);
         File.WriteAllText(Path.Combine(directory, "capture-bounds.csv"),
             "image,rootWidthDip,rootHeightDip,rawWidthPx,rawHeightPx,viewportWidthPx,viewportHeightPx\n");
+        ListMeasurementChecks.Run();
         settings.UpdateAppSettings(new AppSettings { SelectorLayout = SelectorLayout.List });
         var root = (FrameworkElement)window.Content;
         var ring = (ItemsRepeater)root.FindName("BrowserList");
@@ -85,7 +88,7 @@ internal static partial class ListPolishChecks
             Check(!animated && visual.Opacity == 1 && visual.Scale == Vector3.One,
                 "List opens opaque and unscaled without an entrance animation");
             Check(ReferenceEquals(ring.ItemsSource, window.ViewModel.Browsers)
-                && ring.TryGetElement(0) is ListBrowserItem { ActualHeight: 52 },
+                && ring.TryGetElement(0) is ListBrowserItem first && first.ActualHeight == window.ListGeometry.Row,
                 "List returns from ShowWindow with bound, arranged rows");
             Check(DwmFlush() >= 0, "opening compositor flush succeeds");
             double flushed = clock.Elapsed.TotalMilliseconds;
@@ -99,6 +102,7 @@ internal static partial class ListPolishChecks
         }
         File.WriteAllLines(Path.Combine(directory, "list-opening-timing.csv"), samples);
         await CheckFixturesAsync(window, settings, directory, edge, chrome);
+        await ListTextScaleChecks.RunAsync(window, settings, directory);
     }
 
     private static async Task CheckFixturesAsync(SelectorWindow window, TestSettings settings, string? directory,
@@ -241,9 +245,10 @@ internal static partial class ListPolishChecks
                     FormattableString.Invariant($"List element {element.Name}{element.GetType().Name} lands on device pixels ")
                     + FormattableString.Invariant($"(scale {scale}, origin {origin.X},{origin.Y}, size {element.ActualWidth}x{element.ActualHeight})"));
             }
-            int rows = (int)Math.Round(ListMetrics.ViewportHeight(window.AppWindow.Size.Height, scale) / ListMetrics.RowHeight);
+            var geometry = window.ListGeometry;
+            int rows = (int)Math.Round(geometry.Viewport(window.AppWindow.Size.Height, scale) / geometry.Row);
             int visible = Math.Min(count, rows);
-            Check(Math.Abs(scroll.ViewportHeight * scale - Math.Round(visible * ListMetrics.RowHeight * scale)) <= 1,
+            Check(Math.Abs(scroll.ViewportHeight * scale - Math.Round(visible * geometry.Row * scale)) <= 1,
                 FormattableString.Invariant($"scroll viewport shows whole rows in device pixels (count {count}, ")
                 + FormattableString.Invariant($"viewport {scroll.ViewportHeight}, rows {rows}, scale {scale})"));
             Check(count > rows || scroll.ScrollableHeight == 0,
@@ -292,8 +297,9 @@ internal static partial class ListPolishChecks
                 Check(rowPoint.X + item.ActualWidth <= scroll.ActualWidth - 12,
                     "row focus and shortcut bounds leave a separate scrollbar gutter");
                 double scale = root.XamlRoot.RasterizationScale;
-                double wholeRows = Math.Round(scroll.ViewportHeight / ListMetrics.RowHeight);
-                Check(Math.Abs(scroll.ViewportHeight * scale - Math.Round(wholeRows * ListMetrics.RowHeight * scale)) <= 1,
+                double row = window.ListGeometry.Row;
+                double wholeRows = Math.Round(scroll.ViewportHeight / row);
+                Check(Math.Abs(scroll.ViewportHeight * scale - Math.Round(wholeRows * row * scale)) <= 1,
                     "the scroll viewport contains whole rows without boundary slivers");
                 var peer = FrameworkElementAutomationPeer.CreatePeerForElement(button);
                 Check(peer?.GetName() == item.BrowserItem!.Name
@@ -305,7 +311,7 @@ internal static partial class ListPolishChecks
         }
     }
 
-    private static async Task CaptureAsync(SelectorWindow window, string directory, string name, bool settle = true)
+    internal static async Task CaptureAsync(SelectorWindow window, string directory, string name, bool settle = true)
     {
         if (settle)
         {

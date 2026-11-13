@@ -1,4 +1,3 @@
-using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Quiver.App.Helpers;
 using System;
@@ -22,7 +21,6 @@ public sealed partial class ListBrowserItem : BrowserItemControl
     protected override void UpdateItemBindings()
     {
         Bindings.Update();
-        IdentityText.Margin = new Thickness(0, 0, ShortcutVisibility == Visibility.Visible ? 36 : 0, 0);
         UpdateProfileLabel();
     }
 

@@ -72,11 +72,7 @@
             <Border.Shadow>
                 <ThemeShadow />
             </Border.Shadow>
-            <Grid RowSpacing="8">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" MinHeight="52" />
-                    <RowDefinition Height="56" />
-                </Grid.RowDefinitions>
+            <Grid x:Name="ListBody" VerticalAlignment="Top">
                 <ScrollViewer
                     x:Name="BrowserScroll"
                     Padding="0,0,14,0"
