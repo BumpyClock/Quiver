@@ -29,7 +29,6 @@ internal static class ListTextScaleChecks
         var originals = settings.LoadSettings().Browsers.ToArray();
         var scaled = new Dictionary<FrameworkElement, (object FontSize, bool Enabled)>();
         var failures = new List<string>();
-        var limits = new List<string>();
         var report = new List<string> { "path,count,textScale,rowHeight,viewport,footerTop,footerHeight,emptyBottom,windowHeight,extent,rowsExtent" };
         double textScale = 1;
         TypedEventHandler<ItemsRepeater, ItemsRepeaterElementPreparedEventArgs> prepared = (_, args) => Scale(args.Element);
@@ -52,16 +51,17 @@ internal static class ListTextScaleChecks
                     textScale = next;
                     Scale(root);
                     Scale(window.ListRowProbe);
-                    window.MinimizeWindow();
-                    window.ShowWindow();
-                    await Task.Delay(150);
-                    root.UpdateLayout();
-                    CheckFrame(count, "open");
                     Inject(count);
                     settings.UpdateAppSettings(new AppSettings { SelectorLayout = SelectorLayout.List });
                     await Task.Delay(150);
                     root.UpdateLayout();
                     CheckFrame(count, "refresh");
+                    if (count == 30) await CheckWrapAsync();
+                    window.MinimizeWindow();
+                    window.ShowWindow();
+                    await Task.Delay(150);
+                    root.UpdateLayout();
+                    CheckFrame(count, "open");
                     if (directory is not null)
                         await ListPolishChecks.CaptureAsync(window, directory, FormattableString.Invariant($"list-{count}-text-{textScale}"));
                     if (count == 30) await CheckWrapAsync();
@@ -81,7 +81,6 @@ internal static class ListTextScaleChecks
         }
         if (directory is not null) File.WriteAllLines(Path.Combine(directory, "list-text-scale.csv"), report);
         foreach (string line in report) Console.WriteLine("MEASURE: " + line);
-        foreach (string line in limits) Console.WriteLine("LIMIT: " + line);
         if (failures.Count > 0)
             throw new Exception("List text-scale checks failed:\n  " + string.Join("\n  ", failures.Distinct()));
         Console.WriteLine("PASS: List text scale 1-2.25 (row text, keycaps, initials, recovery, footer, whole rows, wrap reveal, tooltips).");
@@ -192,7 +191,8 @@ internal static class ListTextScaleChecks
         {
             string at = FormattableString.Invariant($"(text {textScale})");
             double rows = 30 * window.ListGeometry.Row;
-            bool exactExtent = Math.Abs(scroll.ExtentHeight - rows) < 0.5;
+            Expect(await PollAsync(() => Math.Abs(scroll.ExtentHeight - rows) < 0.5),
+                FormattableString.Invariant($"uniform row extent remains exact after a live size change {at} ({scroll.ExtentHeight}/{rows})"));
             var first = (ListBrowserItem)ring.GetOrCreateElement(0);
             first.FocusItem(FocusState.Keyboard);
             await Task.Delay(50);
@@ -202,8 +202,7 @@ internal static class ListTextScaleChecks
                 && top >= -0.5 && top + last.ActualHeight <= scroll.ViewportHeight + 0.5);
             string detail = FormattableString.Invariant(
                 $"{at} (offset {scroll.VerticalOffset}, scrollable {scroll.ScrollableHeight}, extent {scroll.ExtentHeight}/{rows}, viewport {scroll.ViewportHeight})");
-            if (exactExtent) Expect(revealed, "wrapped last row is fully revealed " + detail);
-            else limits.Add($"extent drift after row-height change; wrapped last row fully revealed: {revealed} {detail}");
+            Expect(revealed, "wrapped last row is fully revealed " + detail);
             Expect(window.NavigateSelection(VirtualKey.Down), $"Down wraps to the first row {at}");
             Expect(await PollAsync(() => scroll.VerticalOffset < 1 && ring.TryGetElement(0) is ListBrowserItem { IsSelected: true }),
                 FormattableString.Invariant($"first row is revealed after Down wrap {at} (offset {scroll.VerticalOffset})"));

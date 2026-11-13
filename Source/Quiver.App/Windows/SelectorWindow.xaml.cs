@@ -278,6 +278,8 @@ public sealed partial class SelectorWindow : Window
 
     private void ApplyListLayout()
     {
+        ListRowsLayout.MinItemHeight = listMetrics.Row;
+        BrowserList.Height = metrics.Count * listMetrics.Row;
         NamePill.UseLayoutRounding = true;
         NamePill.Height = listMetrics.Footer;
         NamePill.Translation = new Vector3(0, 0, 16);

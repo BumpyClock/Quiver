@@ -37,7 +37,6 @@ internal static class ListSelectorChecks
         var first = (ListBrowserItem)ring.GetOrCreateElement(0);
         var second = (ListBrowserItem)ring.GetOrCreateElement(1);
         root.UpdateLayout();
-        Check(ring.Layout is StackLayout, "settings switch the live picker to a list");
         Check(((FrameworkElement)root.FindName("FlowerHost")).Visibility == Visibility.Collapsed,
             "list hides the radial host and selection ink");
         CheckHostFitsWindow(window);
@@ -236,7 +235,9 @@ internal static class ListSelectorChecks
         var ring = (ItemsRepeater)root.FindName("BrowserList");
         var scroll = (ScrollViewer)root.FindName("BrowserScroll");
         bool Selected() => ring.TryGetElement(index) is ListBrowserItem { IsSelected: true };
-        bool Scrolled() => index == 0 ? scroll.VerticalOffset < 1 : scroll.VerticalOffset > 0;
+        bool Scrolled() => ring.TryGetElement(index) is ListBrowserItem target
+            && target.TransformToVisual(scroll).TransformPoint(default).Y is var top
+            && top >= -0.01 && top + target.ActualHeight <= scroll.ViewportHeight + 0.01;
         try
         {
             await SmokeApplication.WaitForAsync(() => Selected() && Scrolled()

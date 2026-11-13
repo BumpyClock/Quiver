@@ -108,7 +108,13 @@
                         ItemsSource="{x:Bind ViewModel.Browsers, Mode=OneWay}"
                         TabFocusNavigation="Once">
                         <ItemsRepeater.Layout>
-                            <StackLayout />
+                            <UniformGridLayout
+                                x:Name="ListRowsLayout"
+                                ItemsStretch="Fill"
+                                MaximumRowsOrColumns="1"
+                                MinItemHeight="52"
+                                MinItemWidth="1"
+                                Orientation="Horizontal" />
                         </ItemsRepeater.Layout>
                         <ItemsRepeater.ItemTemplate>
                             <DataTemplate x:DataType="viewModels:BrowserItemViewModel">

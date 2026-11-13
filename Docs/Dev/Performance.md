@@ -70,7 +70,9 @@ Release-note context for the next release:
   reach the window behind the selector. The brush defines a solid fallback palette in the matching
   theme. Live desktop blur and transparency-off behavior remain unverified.
 
-- List rows keep the 52 DIP rhythm but separate browser identity from the profile label. The shared
+- List rows keep a 52 DIP minimum at normal text size and separate browser identity from the profile
+  label. One measured List metric owns row, recovery-body and footer heights, viewport allocation and
+  keyboard reveal. Scalable text can grow without clipping the row or overlapping the footer. The shared
   measured middle-ellipsis formatter preserves profile suffixes without splitting Unicode text elements.
   Inline profile avatars no longer cover browser artwork. Rows without number shortcuts reclaim that
   column's text width. Selection uses a stable fill; keyboard focus uses system-accent native focus ink.
@@ -78,8 +80,8 @@ Release-note context for the next release:
   full reveal on keyboard wrap. Row allocation uses rounded native window dimensions, so custom DPI
   rounding does not discard a whole row. List content and its footer use device-pixel layout rounding;
   the radial vector root stays unrounded. Profile text retains a native ellipsis fallback.
-  List destination captions show path/query/fragment without repeating
-  the host; tooltips and UI Automation retain the complete address. The shared destination card has a
+  List destination captions show path/query/fragment without repeating the host. The host caption
+  retains non-default HTTP(S) ports and IPv6 brackets; tooltips and UI Automation retain the complete address. The shared destination card has a
   subtle persistent plate and an offset system-accent focus outline. Empty List state includes Manage
   browsers with matching accent ink, offset focus treatment and extra caption clearance.
 
@@ -199,10 +201,10 @@ List checks cover settings-driven layout switching, full-width rows, focus selec
 alternate-launch menus, production arrow navigation wrapping to an offscreen browser, bounded scrolling
 with 30 browsers, reopening at the first row, and the empty state. Wrapping in both directions checks
 that the destination row is fully visible, not merely focused with a nonzero scroll offset. Repeated
-wrap cycles also require actual focus on the expected row. Navigation reveals the fixed-row offset
+wrap cycles also require actual focus on the expected row. Navigation reveals the measured uniform-row offset
 and completes layout before retrieving its focus target, so recycling cannot reassign a held control
 between lookup and focus. List reveal
-uses the fixed row metric and the scroll viewer's viewport; it does not rely on the layout rectangle of
+uses the measured row metric and the scroll viewer's viewport; it does not rely on the layout rectangle of
 a newly realized item. Implicit focus scrolling is disabled for the list host so a parked, force-realized
 row cannot override that reveal with a stale negative layout position. Explicit navigation and actual
 current-focus notifications share the fixed-row reveal, including focus entered through other APIs.
@@ -220,9 +222,13 @@ alternate-launch menus, shortcuts, and selection properties without constructing
 The window retains commands, selection, and lifetime. It captures cursor/monitor placement once per open
 and reuses that snapshot during browser refreshes. If the complete radial bounds cannot fit that monitor,
 the effective layout falls back to List without saving a different preference. A later opening that fits
-regains Radial. Fit checks cover full flower/footer/shadow bounds, negative origins and multiple scales.
-List dimensions have one writer based on actual window
-bounds, applied before the native-shape cache check. Its internal grid owns row and footer allocation.
+regains Radial. Layout transitions and same-Radial growth share the opening work-area clamp while
+preserving a fitting radial anchor. Fit checks cover full flower/footer/shadow bounds, corner refreshes,
+negative origins and multiple scales. List dimensions have one writer based on actual window bounds,
+applied before the native-shape cache check. A measured List frame owns body and footer allocation.
+The one-column uniform virtualizing layout and its explicit total height use that same row metric,
+preventing stale estimated scroll extents after live text-size changes. Allocation keeps double precision
+through the 101-DPI boundary; graphics conversion happens afterward.
 Both layouts use XAML acrylic and shadows in the same visual tree as their controls. Neither replays
 an entrance animation or shows a separately committed native plate. Cold-opening checks
 verify bound, arranged rows and full-opacity, unscaled content without an active entrance animation.
@@ -234,7 +240,9 @@ without icons and do not read or change real user settings.
 
 Set `QUIVER_SELECTOR_POLISH_ONLY=1` for the focused radial fixture. It always asserts fully arranged,
 opaque, unscaled presentation immediately after `ShowWindow` returns, before compositor waits, the
-first rendering event or image encoding. A deferred-arrangement mutation must be rejected.
+first rendering event or image encoding. A deferred-arrangement mutation must be rejected. Radial
+rendering fixtures pass an explicit unconstrained work-area snapshot at the actual native scale so
+all 2-10 browser cases remain Radial; separate fit fixtures retain real and constrained work areas.
 With `QUIVER_SELECTOR_CAPTURE_DIRECTORY` set, it saves actual WinUI `RenderTargetBitmap` captures of
 2 through 10 choices in light/dark themes, including every selection for 2, 3, and 6 choices and
 long profile names. Native containment checks exercise all 108 selections/theme combinations across
@@ -265,7 +273,11 @@ not OS link-click, process activation, rule-matching, icon-loading, or physical 
 
 The ordinary SelectorSmoke suite also runs icon-independent List polish assertions without a capture
 directory or installed browsers. Set `QUIVER_SELECTOR_LIST_NAVIGATION_ONLY=1` to run the focused List
-navigation and repeated-wrap fixture. A separate child process with missing SelectorWindow XAML checks
+navigation and repeated-wrap fixture. `QUIVER_SELECTOR_TEXT_SCALE_ONLY=1` runs strict controlled-font
+checks from 1x through 2.25x, including live increases/decreases, exact scroll extents, row text, keycaps,
+recovery/footer separation and full wrap reveal. These multiply font sizes in native controls without
+changing Windows settings; they do not qualify the actual global accessibility-setting event path.
+A separate child process with missing SelectorWindow XAML checks
 that failed construction shuts down without a second exception.
 
 Set `QUIVER_SELECTOR_LIST_POLISH_ONLY=1` with `QUIVER_SELECTOR_CAPTURE_DIRECTORY` for native icon-bearing

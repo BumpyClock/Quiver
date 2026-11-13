@@ -58,6 +58,7 @@ public sealed partial class SmokeApplication : Application
             CheckMetrics();
             SelectorGeometryChecks.Run();
             SelectorFitChecks.Run();
+            SelectorAddressChecks.Run();
             services = new ServiceCollection()
                 .AddSingleton<ISettingsService, TestSettings>()
                 .AddSingleton<IQuickViewService, TestQuickView>()
@@ -77,6 +78,17 @@ public sealed partial class SmokeApplication : Application
             {
                 await RadialPolishChecks.RunAsync(window, (TestSettings)services.GetRequiredService<ISettingsService>());
                 File.WriteAllText(resultPath, "PASS: radial polish checks.");
+                return;
+            }
+            if (Environment.GetEnvironmentVariable("QUIVER_SELECTOR_TEXT_SCALE_ONLY") == "1")
+            {
+                var settings = (TestSettings)services.GetRequiredService<ISettingsService>();
+                settings.UpdateAppSettings(new AppSettings { SelectorLayout = SelectorLayout.List });
+                window.ShowWindow();
+                await WaitForAsync(() => ((FrameworkElement)window.Content).XamlRoot is not null,
+                    "text-scale fixture has a loaded XAML root");
+                await ListTextScaleChecks.RunAsync(window, settings, directory: null);
+                File.WriteAllText(resultPath, "PASS: strict live List text-scale checks.");
                 return;
             }
             if (Environment.GetEnvironmentVariable("QUIVER_SELECTOR_LIST_NAVIGATION_ONLY") == "1")
@@ -197,6 +209,7 @@ public sealed partial class SmokeApplication : Application
             await ListSelectorChecks.RunAsync(window, testSettings);
             await SelectorFitChecks.RunAsync(window, testSettings);
             await ListPolishChecks.RunChecksAsync(window, testSettings);
+            await SelectorAddressChecks.RunAsync(window, testSettings);
             testSettings.UpdateAppSettings(new AppSettings { SelectorLayout = SelectorLayout.List });
             coldListWindow = new SelectorWindow();
             await ListSelectorChecks.CheckColdOpeningAsync(coldListWindow);

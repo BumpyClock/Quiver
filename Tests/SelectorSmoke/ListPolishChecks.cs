@@ -176,8 +176,10 @@ internal static partial class ListPolishChecks
                         Check(window.NavigateSelection(VirtualKey.Up), "production Up wraps to last row");
                         try
                         {
-                            await SmokeApplication.WaitForAsync(() => ring.TryGetElement(29) is ListBrowserItem { IsSelected: true }
-                                && scroll.VerticalOffset > 0, "long List reveals its final target");
+                            await SmokeApplication.WaitForAsync(() => ring.TryGetElement(29) is ListBrowserItem { IsSelected: true } target
+                                && target.TransformToVisual(scroll).TransformPoint(default).Y is var top
+                                && top >= -0.01 && top + target.ActualHeight <= scroll.ViewportHeight + 0.01,
+                                "long List fully reveals its final target");
                         }
                         catch (Exception error)
                         {
@@ -188,7 +190,7 @@ internal static partial class ListPolishChecks
                         var last = (ListBrowserItem)ring.TryGetElement(29);
                         var point = last.TransformToVisual(scroll).TransformPoint(default);
                         Check(point.Y >= -0.01 && point.Y + last.ActualHeight <= scroll.ViewportHeight + 0.01,
-                            "last row is fully visible after production wrap");
+                            FormattableString.Invariant($"last row is fully visible after production wrap (top {point.Y}, height {last.ActualHeight}, viewport {scroll.ViewportHeight}, offset {scroll.VerticalOffset}, extent {scroll.ExtentHeight})"));
                         await RecordAsync(prefix + "-selected-last", "Production Up wraps and fully reveals last row",
                             (Button)last.FindName("LaunchButton"));
                         CheckVisibleRows();
