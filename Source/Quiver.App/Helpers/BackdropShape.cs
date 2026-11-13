@@ -1,4 +1,5 @@
 using Microsoft.Graphics.Canvas.Geometry;
+using Microsoft.UI.Xaml.Media;
 using Quiver.App.Controls;
 using System;
 using System.Collections.Generic;
@@ -35,8 +36,7 @@ internal sealed partial record BackdropShape(
                 (float)(RadialMetrics.PetalRadius + padding) * scale));
             if (metrics.Count > 1)
             {
-                // One DIP includes the outer half of the selection's two-DIP stroke.
-                var tangents = metrics.SelectionTangents(index, metrics.FlowerCenter, 1 + padding);
+                var tangents = metrics.SelectionTangents(index, metrics.FlowerCenter, RadialMetrics.SelectionInset + padding);
                 connectors.Add([ToPixels(tangents.PetalStart), ToPixels(tangents.PetalEnd),
                     ToPixels(tangents.HubStart), ToPixels(tangents.HubEnd)]);
             }
@@ -85,6 +85,47 @@ internal sealed partial record BackdropShape(
             outline.Dispose();
             throw;
         }
+    }
+
+    public GeometryGroup CreateXamlGeometry()
+    {
+        var group = new GeometryGroup { FillRule = FillRule.Nonzero };
+        foreach (var (center, radius) in Circles)
+            group.Children.Add(new EllipseGeometry
+            {
+                Center = new Point(center.X, center.Y), RadiusX = radius, RadiusY = radius
+            });
+        foreach (var points in Connectors)
+        {
+            var figure = new PathFigure
+            {
+                StartPoint = new Point(points[0].X, points[0].Y), IsClosed = true
+            };
+            for (int index = 1; index < points.Length; index++)
+                figure.Segments.Add(new LineSegment { Point = new Point(points[index].X, points[index].Y) });
+            group.Children.Add(new PathGeometry { Figures = { figure } });
+        }
+        var pill = new PathFigure
+        {
+            StartPoint = new Point(Pill.Left + PillCornerRadius, Pill.Top), IsClosed = true
+        };
+        foreach (var (line, arc) in new[]
+        {
+            (new Point(Pill.Right - PillCornerRadius, Pill.Top), new Point(Pill.Right, Pill.Top + PillCornerRadius)),
+            (new Point(Pill.Right, Pill.Bottom - PillCornerRadius), new Point(Pill.Right - PillCornerRadius, Pill.Bottom)),
+            (new Point(Pill.Left + PillCornerRadius, Pill.Bottom), new Point(Pill.Left, Pill.Bottom - PillCornerRadius)),
+            (new Point(Pill.Left, Pill.Top + PillCornerRadius), new Point(Pill.Left + PillCornerRadius, Pill.Top))
+        })
+        {
+            pill.Segments.Add(new LineSegment { Point = line });
+            pill.Segments.Add(new ArcSegment
+            {
+                Point = arc, Size = new Size(PillCornerRadius, PillCornerRadius),
+                SweepDirection = SweepDirection.Clockwise
+            });
+        }
+        group.Children.Add(new PathGeometry { Figures = { pill } });
+        return group;
     }
 
     public unsafe IntPtr CreateWindowRegion(int inset)

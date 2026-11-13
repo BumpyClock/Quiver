@@ -1,342 +1,72 @@
-using Microsoft.Graphics.Canvas;
-using Microsoft.Graphics.Canvas.Effects;
-using Microsoft.UI.Dispatching;
+using Microsoft.UI.Composition;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Hosting;
+using Path = Microsoft.UI.Xaml.Shapes.Path;
 using System;
-using System.Diagnostics;
 using System.Numerics;
-using System.Runtime.InteropServices;
-using Windows.Foundation;
 using Windows.UI;
-using Windows.UI.Composition;
-using Windows.UI.Composition.Desktop;
 using Windows.UI.ViewManagement;
-using WinRT;
 
 namespace Quiver.App.Helpers;
 
-internal sealed partial class BackdropShapeLayer : IDisposable
+internal sealed class BackdropShapeLayer : IDisposable
 {
-    private static readonly Guid IID_ICompositorDesktopInterop = new("29E691FA-4567-4DCA-B319-D0F207EB6807");
-    private static readonly Color DarkAcrylicTintColor = Color.FromArgb(0x99, 0x20, 0x20, 0x20);
-    private static readonly Color DarkFallbackColor = Color.FromArgb(0xFF, 0x20, 0x20, 0x20);
-    private static readonly Color LightAcrylicTintColor = Color.FromArgb(0xE8, 0xF4, 0xF5, 0xF7);
-    private static readonly Color LightFallbackColor = Color.FromArgb(0xFF, 0xF4, 0xF5, 0xF7);
-    private const float ShadowBlurRadius = 16;
-    private const float ShadowOffsetY = 4;
-    private static IntPtr dispatcherQueueController;
-
-    private readonly Compositor compositor;
-    private readonly DesktopWindowTarget target;
-    private readonly DispatcherQueue dispatcherQueue;
-    private readonly UISettings uiSettings = new();
-    private readonly AccessibilitySettings accessibilitySettings = new();
-    private readonly ContainerVisual root;
-    private readonly CompositionPathGeometry outlineGeometry;
-    private readonly CompositionColorBrush fallbackBrush;
-    private readonly CompositionColorBrush highContrastBrush;
-    private readonly ShapeVisual silhouetteMask;
-    private readonly CompositionSpriteShape silhouetteMaskFill;
-    private readonly CompositionVisualSurface silhouetteMaskSurface;
-    private readonly CompositionSurfaceBrush silhouetteMaskBrush;
-    private readonly CompositionMaskBrush plateBrush;
-    private readonly SpriteVisual plate;
-    private readonly DropShadow shadow;
+    private readonly FrameworkElement host;
+    private readonly Path plate;
     private readonly SpriteVisual shadowHost;
-    private readonly CubicBezierEasingFunction openEasing;
-    private readonly Vector3KeyFrameAnimation openScaleAnimation;
-    private readonly ScalarKeyFrameAnimation openOpacityAnimation;
-    private CompositionBackdropBrush? backdropBrush;
-    private CompositionEffectFactory? acrylicFactory;
-    private CompositionEffectBrush? acrylicBrush;
-    private AcrylicSupport acrylicSupport;
-    private bool isDark = true;
+    private readonly DropShadow shadow;
+    private readonly CompositionBrush mask;
+    private readonly AccessibilitySettings accessibility = new();
     private bool disposed;
 
-    public BackdropShapeLayer(IntPtr hwnd)
+    public BackdropShapeLayer(FrameworkElement host, Path plate)
     {
-        EnsureDispatcherQueue();
-        // A host backdrop brush renders empty unless the window opts in.
-        int useHostBackdrop = 1;
-        if (DwmSetWindowAttribute(hwnd, DwmaUseHostBackdropBrush, ref useHostBackdrop, sizeof(int)) < 0)
-        {
-            acrylicSupport = AcrylicSupport.Unsupported;
-        }
-
-        dispatcherQueue = DispatcherQueue.GetForCurrentThread();
-        compositor = new Compositor();
-        target = CreateDesktopWindowTarget(compositor, hwnd);
-
-        root = compositor.CreateContainerVisual();
-        root.RelativeSizeAdjustment = Vector2.One;
-        target.Root = root;
-
-        outlineGeometry = compositor.CreatePathGeometry();
-        fallbackBrush = compositor.CreateColorBrush(DarkFallbackColor);
-        highContrastBrush = compositor.CreateColorBrush();
-
-        silhouetteMask = compositor.CreateShapeVisual();
-        silhouetteMaskFill = compositor.CreateSpriteShape(outlineGeometry);
-        silhouetteMaskFill.FillBrush = fallbackBrush;
-        silhouetteMask.Shapes.Add(silhouetteMaskFill);
-        silhouetteMaskSurface = compositor.CreateVisualSurface();
-        silhouetteMaskSurface.SourceVisual = silhouetteMask;
-        silhouetteMaskBrush = compositor.CreateSurfaceBrush(silhouetteMaskSurface);
-        silhouetteMaskBrush.Stretch = CompositionStretch.None;
-        silhouetteMaskBrush.HorizontalAlignmentRatio = 0;
-        silhouetteMaskBrush.VerticalAlignmentRatio = 0;
-
+        this.host = host;
+        this.plate = plate;
+        var compositor = ElementCompositionPreview.GetElementVisual(host).Compositor;
+        mask = plate.GetAlphaMask();
         shadow = compositor.CreateDropShadow();
-        shadow.BlurRadius = ShadowBlurRadius;
-        shadow.Offset = new Vector3(0, ShadowOffsetY, 0);
-        shadow.Mask = silhouetteMaskBrush;
-        ApplyShadowTheme();
+        shadow.Mask = mask;
+        shadow.BlurRadius = 16;
+        shadow.Offset = new Vector3(0, 4, 0);
         shadowHost = compositor.CreateSpriteVisual();
         shadowHost.RelativeSizeAdjustment = Vector2.One;
         shadowHost.Shadow = shadow;
-        root.Children.InsertAtTop(shadowHost);
-
-        plateBrush = compositor.CreateMaskBrush();
-        plateBrush.Mask = silhouetteMaskBrush;
-        plate = compositor.CreateSpriteVisual();
-        plate.RelativeSizeAdjustment = Vector2.One;
-        plate.Brush = plateBrush;
-        root.Children.InsertAtTop(plate);
-        UpdateMaterial();
-
-        openEasing = compositor.CreateCubicBezierEasingFunction(new Vector2(0.16f, 1f), new Vector2(0.3f, 1f));
-        openScaleAnimation = compositor.CreateVector3KeyFrameAnimation();
-        openScaleAnimation.InsertKeyFrame(0f, new Vector3(0.82f, 0.82f, 1));
-        openScaleAnimation.InsertKeyFrame(1f, Vector3.One, openEasing);
-        openOpacityAnimation = compositor.CreateScalarKeyFrameAnimation();
-        openOpacityAnimation.InsertKeyFrame(0f, 0f);
-        openOpacityAnimation.InsertKeyFrame(1f, 1f, openEasing);
-
-        uiSettings.AdvancedEffectsEnabledChanged += UISettings_MaterialChanged;
-        uiSettings.ColorValuesChanged += UISettings_MaterialChanged;
+        ElementCompositionPreview.SetElementChildVisual(host, shadowHost);
+        SetTheme(true);
     }
 
     public void SetShape(BackdropShape shape, bool dark)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
-
-        using var outline = shape.CreateGeometry();
-        outlineGeometry.Path = new CompositionPath(outline);
-        silhouetteMask.Size = shape.Size;
-        silhouetteMaskSurface.SourceSize = shape.Size;
-
+        plate.Data = shape.CreateXamlGeometry();
+        host.Width = plate.Width = shape.Size.X;
+        host.Height = plate.Height = shape.Size.Y;
         SetTheme(dark);
     }
 
     public void SetTheme(bool dark)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
-        if (isDark != dark)
-        {
-            isDark = dark;
-            ApplyShadowTheme();
-            fallbackBrush.Color = isDark ? DarkFallbackColor : LightFallbackColor;
-            acrylicBrush?.Properties.InsertColor("Tint.Color", isDark ? DarkAcrylicTintColor : LightAcrylicTintColor);
-            UpdateMaterial();
-        }
+        shadow.Color = dark ? Color.FromArgb(255, 0, 0, 0) : Color.FromArgb(255, 26, 36, 48);
+        shadow.Opacity = accessibility.HighContrast ? 0 : dark ? 0.55f : 0.22f;
     }
 
     public void SetVisible(bool visible)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
-        root.IsVisible = visible;
-    }
-
-    public void PlayOpenAnimation(Vector2 centerPx, TimeSpan duration)
-    {
-        ObjectDisposedException.ThrowIf(disposed, this);
-        root.CenterPoint = new Vector3(centerPx, 0);
-        openScaleAnimation.Duration = duration;
-        openOpacityAnimation.Duration = duration;
-        root.StartAnimation("Scale", openScaleAnimation);
-        root.StartAnimation("Opacity", openOpacityAnimation);
-    }
-
-    private void ApplyShadowTheme()
-    {
-        shadow.Color = isDark ? Color.FromArgb(0xFF, 0x00, 0x00, 0x00) : Color.FromArgb(0xFF, 0x1A, 0x24, 0x30);
-        shadow.Opacity = isDark ? 0.6f : 0.28f;
-    }
-
-    private void UpdateMaterial()
-    {
-        if (accessibilitySettings.HighContrast)
-        {
-            highContrastBrush.Color = uiSettings.GetColorValue(UIColorType.Background);
-            plateBrush.Source = highContrastBrush;
-            return;
-        }
-
-        plateBrush.Source = uiSettings.AdvancedEffectsEnabled && GetAcrylicBrush() is { } acrylic ? acrylic : fallbackBrush;
-    }
-
-    // AccessibilitySettings.HighContrastChanged needs a CoreWindow; ColorValuesChanged also fires on high contrast changes.
-    private void UISettings_MaterialChanged(UISettings sender, object args) => QueueMaterialUpdate();
-
-    private void QueueMaterialUpdate()
-    {
-        if (!dispatcherQueue.TryEnqueue(() =>
-        {
-            if (!disposed)
-            {
-                UpdateMaterial();
-            }
-        }))
-        {
-            Debug.WriteLine("Could not enqueue the selector material update.");
-        }
-    }
-
-    private enum AcrylicSupport { Unknown, Available, Unsupported }
-
-    private CompositionEffectBrush? GetAcrylicBrush()
-    {
-        if (acrylicSupport != AcrylicSupport.Unknown)
-        {
-            return acrylicBrush;
-        }
-
-        try
-        {
-            backdropBrush ??= compositor.CreateHostBackdropBrush();
-            if (acrylicFactory is null)
-            {
-                using var tint = new ColorSourceEffect
-                {
-                    Name = "Tint",
-                    Color = isDark ? DarkAcrylicTintColor : LightAcrylicTintColor
-                };
-                using var tinted = new CompositeEffect { Mode = CanvasComposite.SourceOver };
-                tinted.Sources.Add(new CompositionEffectSourceParameter("Backdrop"));
-                tinted.Sources.Add(tint);
-                acrylicFactory = compositor.CreateEffectFactory(tinted, new[] { "Tint.Color" });
-            }
-
-            acrylicBrush = acrylicFactory.CreateBrush();
-            acrylicBrush.SetSourceParameter("Backdrop", backdropBrush);
-            acrylicSupport = AcrylicSupport.Available;
-            return acrylicBrush;
-        }
-        catch (Exception ex) when (ex is COMException or NotImplementedException)
-        {
-            Debug.WriteLine($"Acrylic unavailable (0x{ex.HResult:X8}): {ex.Message}");
-            acrylicSupport = AcrylicSupport.Unsupported;
-            return null;
-        }
+        host.Visibility = plate.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
     }
 
     public void Dispose()
     {
-        if (disposed)
-        {
-            return;
-        }
-
+        if (disposed) return;
         disposed = true;
-        uiSettings.AdvancedEffectsEnabledChanged -= UISettings_MaterialChanged;
-        uiSettings.ColorValuesChanged -= UISettings_MaterialChanged;
-        target.Root = null;
-        root.StopAnimation("Scale");
-        root.StopAnimation("Opacity");
-        root.Children.RemoveAll();
+        ElementCompositionPreview.SetElementChildVisual(host, null);
         shadowHost.Shadow = null;
-        plate.Brush = null;
-        plateBrush.Source = null;
-        plateBrush.Mask = null;
-        silhouetteMask.Shapes.Clear();
-        plate.Dispose();
-        plateBrush.Dispose();
-        acrylicBrush?.Dispose();
-        acrylicFactory?.Dispose();
-        backdropBrush?.Dispose();
-        shadow.Dispose();
+        shadow.Mask = null;
         shadowHost.Dispose();
-        silhouetteMaskBrush.Dispose();
-        silhouetteMaskSurface.Dispose();
-        silhouetteMaskFill.Dispose();
-        silhouetteMask.Dispose();
-        fallbackBrush.Dispose();
-        highContrastBrush.Dispose();
-        outlineGeometry.Dispose();
-        root.Dispose();
-        openScaleAnimation.Dispose();
-        openOpacityAnimation.Dispose();
-        openEasing.Dispose();
-        target.Dispose();
-        compositor.Dispose();
+        shadow.Dispose();
+        mask.Dispose();
     }
-
-    #region Interop
-    private static void EnsureDispatcherQueue()
-    {
-        if (global::Windows.System.DispatcherQueue.GetForCurrentThread() is not null || dispatcherQueueController != IntPtr.Zero)
-        {
-            return;
-        }
-
-        var options = new DispatcherQueueOptions
-        {
-            Size = Marshal.SizeOf<DispatcherQueueOptions>(),
-            ThreadType = DqTypeThreadCurrent,
-            ApartmentType = DqtatComSta,
-        };
-        Marshal.ThrowExceptionForHR(CreateDispatcherQueueController(options, out dispatcherQueueController));
-    }
-
-    private static unsafe DesktopWindowTarget CreateDesktopWindowTarget(Compositor compositor, IntPtr hwnd)
-    {
-        IntPtr unknown = MarshalInspectable<Compositor>.FromManaged(compositor);
-        try
-        {
-            Guid iid = IID_ICompositorDesktopInterop;
-            Marshal.ThrowExceptionForHR(Marshal.QueryInterface(unknown, in iid, out IntPtr interop));
-            try
-            {
-                var vtable = *(IntPtr**)interop;
-                var create = (delegate* unmanaged[Stdcall]<IntPtr, IntPtr, int, IntPtr*, int>)vtable[CreateDesktopWindowTargetSlot];
-                IntPtr targetAbi;
-                Marshal.ThrowExceptionForHR(create(interop, hwnd, 0, &targetAbi));
-                try
-                {
-                    return DesktopWindowTarget.FromAbi(targetAbi);
-                }
-                finally
-                {
-                    Marshal.Release(targetAbi);
-                }
-            }
-            finally
-            {
-                Marshal.Release(interop);
-            }
-        }
-        finally
-        {
-            Marshal.Release(unknown);
-        }
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct DispatcherQueueOptions
-    {
-        public int Size;
-        public int ThreadType;
-        public int ApartmentType;
-    }
-
-    private const int DwmaUseHostBackdropBrush = 17;
-    private const int DqTypeThreadCurrent = 2;
-    private const int DqtatComSta = 2;
-    private const int CreateDesktopWindowTargetSlot = 3;
-
-    [LibraryImport("dwmapi.dll")]
-    private static partial int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
-
-    [LibraryImport("CoreMessaging.dll")]
-    private static partial int CreateDispatcherQueueController(DispatcherQueueOptions options, out IntPtr dispatcherQueueController);
-    #endregion
 }

@@ -1,3 +1,4 @@
+using Quiver.App.Helpers;
 using System;
 using Windows.Foundation;
 
@@ -16,8 +17,16 @@ internal static class ListMetrics
     public const double CursorGap = 12;
     public const double WindowWidth = ContentWidth + 2 * ShadowMargin;
 
-    public static double WindowHeight(int count) => Math.Min(MaximumHeight,
-        2 * ShadowMargin + 2 * Padding + Math.Max(1, count) * RowHeight + FooterGap + FooterHeight);
+    private const double NonRowHeight = 2 * ShadowMargin + 2 * Padding + FooterGap + FooterHeight;
+    private const int MaximumVisibleRows = (int)((MaximumHeight - NonRowHeight) / RowHeight);
+
+    public static double WindowHeight(int count) => NonRowHeight + Math.Clamp(count, 1, MaximumVisibleRows) * RowHeight;
+    public static double ViewportHeight(int windowPixels, double scale)
+    {
+        int rows = Math.Max(0, (int)Math.Floor(((windowPixels + 0.5) / scale - NonRowHeight) / RowHeight));
+        while (rows > 0 && CursorPosition.NativeLength(NonRowHeight + rows * RowHeight, scale) > windowPixels) rows--;
+        return rows * RowHeight;
+    }
     public static Point Anchor => new(ShadowMargin - CursorGap, ShadowMargin + Padding);
     public static Rect Bounds(double windowWidth, double windowHeight) => new(ShadowMargin, ShadowMargin,
         Math.Max(0, windowWidth - 2 * ShadowMargin), Math.Max(0, windowHeight - 2 * ShadowMargin));

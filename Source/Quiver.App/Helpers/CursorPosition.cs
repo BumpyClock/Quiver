@@ -13,6 +13,10 @@ internal readonly record struct CursorSnapshot(PointInt32 Position, RectInt32? W
 {
     public RectInt32 Place(SelectorGeometry geometry) => CursorPosition.CalculateBounds(
         geometry.Width, geometry.Height, geometry.Anchor, Position, WorkArea, Scale, geometry.Placement);
+
+    public bool Fits(SelectorGeometry geometry) => WorkArea is not { } area
+        || (CursorPosition.NativeLength(geometry.Width, Scale) <= area.Width
+            && CursorPosition.NativeLength(geometry.Height, Scale) <= area.Height);
 }
 
 internal static partial class CursorPosition
@@ -46,10 +50,10 @@ internal static partial class CursorPosition
     internal static RectInt32 CalculateBounds(double widthDips, double heightDips, Point anchorDips,
         PointInt32 cursor, RectInt32? workArea, double scale, SelectorPlacement placement)
     {
-        int width = (int)Math.Round(widthDips * scale);
-        int height = (int)Math.Round(heightDips * scale);
-        int x = cursor.X - (int)Math.Round(anchorDips.X * scale);
-        int y = cursor.Y - (int)Math.Round(anchorDips.Y * scale);
+        int width = NativeLength(widthDips, scale);
+        int height = NativeLength(heightDips, scale);
+        int x = cursor.X - NativeLength(anchorDips.X, scale);
+        int y = cursor.Y - NativeLength(anchorDips.Y, scale);
         if (workArea is { } area)
         {
             if (placement == SelectorPlacement.BesideCursor)
@@ -57,13 +61,15 @@ internal static partial class CursorPosition
                 width = Math.Min(width, area.Width);
                 height = Math.Min(height, area.Height);
                 if (x + width > area.X + area.Width)
-                    x = cursor.X - width + (int)Math.Round(anchorDips.X * scale);
+                    x = cursor.X - width + NativeLength(anchorDips.X, scale);
             }
             x = Math.Clamp(x, area.X, Math.Max(area.X, area.X + area.Width - width));
             y = Math.Clamp(y, area.Y, Math.Max(area.Y, area.Y + area.Height - height));
         }
         return new RectInt32(x, y, width, height);
     }
+
+    internal static int NativeLength(double dips, double scale) => (int)Math.Round(dips * scale);
 
     internal static double WindowScale(IntPtr hwnd) => GetDpiForWindow(hwnd) / DefaultDpi;
 

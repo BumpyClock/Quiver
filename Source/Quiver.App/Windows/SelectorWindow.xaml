@@ -13,8 +13,29 @@
     <Grid
         x:Name="DiscRoot"
         Background="Transparent"
+        UseLayoutRounding="False"
         KeyboardAcceleratorPlacementMode="Hidden"
+        GotFocus="DiscRoot_FocusChanged"
+        LostFocus="DiscRoot_FocusChanged"
         PreviewKeyDown="DiscRoot_PreviewKeyDown">
+        <Grid.Resources>
+            <ResourceDictionary>
+                <ResourceDictionary.ThemeDictionaries>
+                    <ResourceDictionary x:Key="Light">
+                        <SolidColorBrush x:Key="PickerCardFill" Color="#08000000" />
+                        <SolidColorBrush x:Key="PickerCardStroke" Color="#30182432" />
+                    </ResourceDictionary>
+                    <ResourceDictionary x:Key="Dark">
+                        <SolidColorBrush x:Key="PickerCardFill" Color="#08FFFFFF" />
+                        <SolidColorBrush x:Key="PickerCardStroke" Color="#30FFFFFF" />
+                    </ResourceDictionary>
+                    <ResourceDictionary x:Key="HighContrast">
+                        <SolidColorBrush x:Key="PickerCardFill" Color="{ThemeResource SystemColorWindowColor}" />
+                        <SolidColorBrush x:Key="PickerCardStroke" Color="{ThemeResource SystemColorWindowTextColor}" />
+                    </ResourceDictionary>
+                </ResourceDictionary.ThemeDictionaries>
+            </ResourceDictionary>
+        </Grid.Resources>
         <Grid.KeyboardAccelerators>
             <KeyboardAccelerator Key="C" Invoked="CopyAccelerator_Invoked" />
             <KeyboardAccelerator
@@ -25,6 +46,18 @@
             <KeyboardAccelerator Key="Escape" Invoked="EscapeAccelerator_Invoked" />
         </Grid.KeyboardAccelerators>
 
+        <Grid
+            x:Name="PlateShadowHost"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Top"
+            IsHitTestVisible="False" />
+        <Path
+            x:Name="SelectorPlate"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Top"
+            Fill="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}"
+            IsHitTestVisible="False" />
+
         <Border
             x:Name="ListHost"
             Margin="0,20,0,0"
@@ -34,20 +67,44 @@
             Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}"
             CornerRadius="12"
             Translation="0,0,16"
+            UseLayoutRounding="True"
             Visibility="Collapsed">
             <Border.Shadow>
                 <ThemeShadow />
             </Border.Shadow>
             <Grid RowSpacing="8">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="*" />
-                    <!-- Reserve space for the shared NamePill, which remains in the window root. -->
+                    <RowDefinition Height="Auto" MinHeight="52" />
                     <RowDefinition Height="56" />
                 </Grid.RowDefinitions>
                 <ScrollViewer
                     x:Name="BrowserScroll"
+                    Padding="0,0,14,0"
+                    VerticalAlignment="Top"
+                    BringIntoViewOnFocusChange="False"
                     HorizontalScrollBarVisibility="Disabled"
                     VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer.Resources>
+                        <ResourceDictionary>
+                            <ResourceDictionary.ThemeDictionaries>
+                                <ResourceDictionary x:Key="Light">
+                                    <SolidColorBrush x:Key="ScrollBarPanningThumbBackground" Color="#495A6D" />
+                                    <Color x:Key="ScrollBarPanningThumbBackgroundColor">#495A6D</Color>
+                                    <SolidColorBrush x:Key="ScrollBarThumbFill" Color="#495A6D" />
+                                </ResourceDictionary>
+                                <ResourceDictionary x:Key="Dark">
+                                    <SolidColorBrush x:Key="ScrollBarPanningThumbBackground" Color="#C3CBD6" />
+                                    <Color x:Key="ScrollBarPanningThumbBackgroundColor">#C3CBD6</Color>
+                                    <SolidColorBrush x:Key="ScrollBarThumbFill" Color="#C3CBD6" />
+                                </ResourceDictionary>
+                                <ResourceDictionary x:Key="HighContrast">
+                                    <SolidColorBrush x:Key="ScrollBarPanningThumbBackground" Color="{ThemeResource SystemColorWindowTextColor}" />
+                                    <StaticResource x:Key="ScrollBarPanningThumbBackgroundColor" ResourceKey="SystemColorWindowTextColor" />
+                                    <SolidColorBrush x:Key="ScrollBarThumbFill" Color="{ThemeResource SystemColorWindowTextColor}" />
+                                </ResourceDictionary>
+                            </ResourceDictionary.ThemeDictionaries>
+                        </ResourceDictionary>
+                    </ScrollViewer.Resources>
                     <ItemsRepeater
                         x:Name="BrowserList"
                         ElementIndexChanged="BrowserRing_ElementIndexChanged"
@@ -64,13 +121,32 @@
                         </ItemsRepeater.ItemTemplate>
                     </ItemsRepeater>
                 </ScrollViewer>
-                <TextBlock
+                <StackPanel
                     x:Name="EmptyListMessage"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    Text="No visible browsers"
-                    Visibility="Collapsed" />
+                    Spacing="8"
+                    Visibility="Collapsed">
+                    <TextBlock
+                        HorizontalAlignment="Center"
+                        FontSize="12"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="No visible browsers" />
+                    <HyperlinkButton
+                        x:Name="ManageBrowsersButton"
+                        MinHeight="0"
+                        Padding="2,0"
+                        HorizontalAlignment="Center"
+                        Click="ManageBrowsersBtnClick"
+                        FontSize="12"
+                        Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                        FocusVisualMargin="-3"
+                        FocusVisualPrimaryBrush="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                        FocusVisualPrimaryThickness="2"
+                        FocusVisualSecondaryThickness="1">
+                        <TextBlock Text="Manage browsers" TextDecorations="Underline" />
+                    </HyperlinkButton>
+                </StackPanel>
             </Grid>
         </Border>
 
@@ -93,8 +169,8 @@
                             <SolidColorBrush x:Key="HubBackground" Color="Transparent" />
                             <SolidColorBrush x:Key="HubBackgroundPointerOver" Color="#0C182432" />
                             <SolidColorBrush x:Key="HubBackgroundPressed" Color="#18182432" />
-                            <SolidColorBrush x:Key="SelectionFill" Color="#FAFBFF" />
-                            <SolidColorBrush x:Key="SelectionStroke" Color="#182432" />
+                            <SolidColorBrush x:Key="SelectionFill" Color="#E8EDF5" />
+                            <SolidColorBrush x:Key="SelectionStroke" Color="#4A5664" />
                             <SolidColorBrush x:Key="HubForeground" Color="#182432" />
                         </ResourceDictionary>
                         <ResourceDictionary x:Key="HighContrast">
@@ -139,7 +215,7 @@
                 Height="48"
                 Padding="0"
                 HorizontalAlignment="Center"
-                VerticalAlignment="Center"
+                VerticalAlignment="Top"
                 AutomationProperties.Name="Link options"
                 BorderThickness="0"
                 Background="{ThemeResource HubBackground}"
@@ -167,8 +243,15 @@
             VerticalAlignment="Top"
             HorizontalContentAlignment="Stretch"
             AutomationProperties.Name="Link options"
-            BorderThickness="0"
+            AutomationProperties.HelpText="{x:Bind ViewModel.Url, Mode=OneWay}"
+            Background="{ThemeResource PickerCardFill}"
+            BorderBrush="{ThemeResource PickerCardStroke}"
+            BorderThickness="1"
             CornerRadius="12"
+            FocusVisualMargin="-3"
+            FocusVisualPrimaryBrush="{ThemeResource AccentTextFillColorPrimaryBrush}"
+            FocusVisualPrimaryThickness="2"
+            FocusVisualSecondaryThickness="1"
             ToolTipService.ToolTip="{x:Bind ViewModel.Url, Mode=OneWay}">
             <Button.Resources>
                 <ResourceDictionary>
@@ -258,10 +341,11 @@
                     </Grid>
                 </StackPanel>
                 <FontIcon
+                    x:Name="PillChevron"
                     Grid.Column="1"
                     VerticalAlignment="Center"
-                    FontSize="10"
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    FontSize="12"
+                    Foreground="{ThemeResource TextFillColorPrimaryBrush}"
                     Glyph="&#xE70D;" />
             </Grid>
         </Button>

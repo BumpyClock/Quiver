@@ -18,24 +18,22 @@
                     <SolidColorBrush x:Key="PetalSelectedForeground" Color="#F7F8FA" />
                     <SolidColorBrush x:Key="PetalShortcutForeground" Color="#F7F8FA" />
                     <SolidColorBrush x:Key="PetalShortcutSelectedForeground" Color="#F7F8FA" />
-                    <SolidColorBrush x:Key="PetalShortcutFill" Color="#353535" />
-                    <SolidColorBrush x:Key="PetalShortcutSelectedFill" Color="#404854" />
+                    <SolidColorBrush x:Key="PetalShortcutFill" Color="#4C4C4C" />
+                    <SolidColorBrush x:Key="PetalShortcutSelectedFill" Color="#596575" />
                     <SolidColorBrush x:Key="PetalPressedFill" Color="#14FFFFFF" />
                     <SolidColorBrush x:Key="PetalInk" Color="#202020" />
-                    <SolidColorBrush x:Key="PetalIconFill" Color="#2C2C2C" />
-                    <SolidColorBrush x:Key="PetalIconStroke" Color="#20FFFFFF" />
+                    <SolidColorBrush x:Key="PetalShortcutStroke" Color="#20FFFFFF" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Light">
                     <SolidColorBrush x:Key="PetalForeground" Color="#182432" />
                     <SolidColorBrush x:Key="PetalSelectedForeground" Color="#182432" />
-                    <SolidColorBrush x:Key="PetalShortcutForeground" Color="#182432" />
+                    <SolidColorBrush x:Key="PetalShortcutForeground" Color="#101820" />
                     <SolidColorBrush x:Key="PetalShortcutSelectedForeground" Color="#182432" />
-                    <SolidColorBrush x:Key="PetalShortcutFill" Color="#EFFFFFFF" />
-                    <SolidColorBrush x:Key="PetalShortcutSelectedFill" Color="#F7FFFFFF" />
+                    <SolidColorBrush x:Key="PetalShortcutFill" Color="#E4E8ED" />
+                    <SolidColorBrush x:Key="PetalShortcutSelectedFill" Color="#DFE4EA" />
                     <SolidColorBrush x:Key="PetalPressedFill" Color="#14182432" />
                     <SolidColorBrush x:Key="PetalInk" Color="#FFFFFF" />
-                    <SolidColorBrush x:Key="PetalIconFill" Color="#F7FFFFFF" />
-                    <SolidColorBrush x:Key="PetalIconStroke" Color="#18000000" />
+                    <SolidColorBrush x:Key="PetalShortcutStroke" Color="#30000000" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="HighContrast">
                     <SolidColorBrush x:Key="PetalForeground" Color="{ThemeResource SystemColorWindowTextColor}" />
@@ -46,8 +44,7 @@
                     <SolidColorBrush x:Key="PetalShortcutSelectedFill" Color="{ThemeResource SystemColorHighlightColor}" />
                     <SolidColorBrush x:Key="PetalPressedFill" Color="{ThemeResource SystemColorHighlightColor}" />
                     <SolidColorBrush x:Key="PetalInk" Color="{ThemeResource SystemColorWindowColor}" />
-                    <SolidColorBrush x:Key="PetalIconFill" Color="{ThemeResource SystemColorWindowColor}" />
-                    <SolidColorBrush x:Key="PetalIconStroke" Color="{ThemeResource SystemColorWindowTextColor}" />
+                    <SolidColorBrush x:Key="PetalShortcutStroke" Color="{ThemeResource SystemColorWindowTextColor}" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
         </ResourceDictionary>
@@ -113,32 +110,30 @@
             </Button.Template>
             <Grid>
                 <StackPanel
+                    Margin="0,6,0,0"
                     HorizontalAlignment="Center"
-                    VerticalAlignment="Center"
-                    Spacing="5">
+                    VerticalAlignment="Top"
+                    Spacing="4">
                     <Grid
-                        x:Name="IconTile"
-                        Width="58"
-                        Height="58"
+                        x:Name="IconSlot"
+                        Width="80"
+                        Height="52"
                         HorizontalAlignment="Center">
-                        <Border
-                            x:Name="IconSurface"
-                            Background="{ThemeResource PetalIconFill}"
-                            BorderBrush="{ThemeResource PetalIconStroke}"
-                            BorderThickness="1"
-                            CornerRadius="16">
-                            <Image
-                                x:Name="BrowserIcon"
-                                Width="44"
-                                Height="44"
-                                Source="{x:Bind BrowserItem.Icon, Mode=OneWay}" />
-                        </Border>
+                        <Image
+                            x:Name="BrowserIcon"
+                            Width="40"
+                            Height="40"
+                            Margin="14,1,0,0"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Top"
+                            Source="{x:Bind BrowserItem.Icon, Mode=OneWay}" />
                         <Grid
+                            x:Name="ProfileBadge"
                             Width="17"
                             Height="17"
-                            Margin="0,0,-3,-2"
-                            HorizontalAlignment="Right"
-                            VerticalAlignment="Bottom"
+                            Margin="12,28,0,0"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Top"
                             Visibility="{x:Bind ProfileBadgeVisibility, Mode=OneWay}">
                             <Ellipse Fill="{ThemeResource AccentFillColorDefaultBrush}" />
                             <TextBlock
@@ -157,13 +152,13 @@
                         </Grid>
                         <Border
                             x:Name="ShortcutBadge"
-                            Width="24"
-                            Height="20"
-                            Margin="0,0,0,3"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Bottom"
+                            Width="20"
+                            Height="18"
+                            Margin="0,10,4,0"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
                             Background="{ThemeResource PetalShortcutFill}"
-                            BorderBrush="{ThemeResource PetalIconStroke}"
+                            BorderBrush="{ThemeResource PetalShortcutStroke}"
                             BorderThickness="1"
                             CornerRadius="6"
                             IsHitTestVisible="False"
@@ -172,7 +167,7 @@
                                 x:Name="ShortcutText"
                                 HorizontalAlignment="Center"
                                 VerticalAlignment="Center"
-                                FontSize="11"
+                                FontSize="12"
                                 FontWeight="SemiBold"
                                 Foreground="{ThemeResource PetalShortcutForeground}"
                                 Text="{x:Bind ShortcutNumber, Mode=OneWay}" />
@@ -180,15 +175,23 @@
                     </Grid>
                     <TextBlock
                         x:Name="PetalName"
-                        MaxWidth="80"
+                        MaxWidth="76"
                         HorizontalAlignment="Center"
                         FontSize="10"
                         FontWeight="SemiBold"
                         Foreground="{ThemeResource PetalForeground}"
                         MaxLines="1"
-                        Text="{x:Bind BrowserItem.ShortName, Mode=OneWay}"
                         TextTrimming="CharacterEllipsis"
                         TextWrapping="NoWrap" />
+                    <Border
+                        x:Name="KeyboardFocusIndicator"
+                        Width="32"
+                        Height="2"
+                        HorizontalAlignment="Center"
+                        Background="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                        CornerRadius="1"
+                        IsHitTestVisible="False"
+                        Opacity="0" />
                 </StackPanel>
             </Grid>
         </Button>

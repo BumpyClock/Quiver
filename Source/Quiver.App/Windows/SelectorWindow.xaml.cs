@@ -2,10 +2,8 @@ using Quiver.App.Controls;
 using Quiver.App.Helpers;
 using Quiver.App.Services.Interfaces;
 using Quiver.App.ViewModels;
-using Quiver.Library;
 using Quiver.Library.Models;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.UI.Composition;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -23,7 +21,6 @@ using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
 using Windows.Graphics;
 using Windows.System;
-using Windows.UI.ViewManagement;
 using WinRT;
 using WinRT.Interop;
 using WinUIEx;
@@ -33,9 +30,6 @@ namespace Quiver.App.Windows;
 [GeneratedBindableCustomProperty]
 public sealed partial class SelectorWindow : Window
 {
-    private static readonly TimeSpan OpenAnimationDuration = TimeSpan.FromMilliseconds(180);
-    private static readonly UISettings AnimationSettings = new();
-
     public SelectorPageViewModel ViewModel { get; }
     private readonly IQuickViewService quickViewService;
     private readonly ISettingsService settingsService;
@@ -51,13 +45,10 @@ public sealed partial class SelectorWindow : Window
     private SelectorLayout layout;
     private CursorSnapshot openingCursor;
     private ItemsRepeater Items => layout == SelectorLayout.List ? BrowserList : BrowserRing;
-    private SelectorGeometry Geometry => layout == SelectorLayout.List
-        ? new(ListMetrics.WindowWidth, ListMetrics.WindowHeight(metrics.Count), ListMetrics.Anchor, SelectorPlacement.BesideCursor)
-        : new(metrics.WindowWidth, metrics.WindowHeight, metrics.FlowerCenter, SelectorPlacement.Centered);
+    private SelectorGeometry Geometry => GeometryFor(layout, metrics);
+    private SelectorLayout PreferredLayout => ViewModel.AppSettings.SelectorLayout;
     private (RadialMetrics Metrics, SelectorLayout Layout, int Width, int Height, float Scale)? appliedShape;
     private int selectedIndex;
-    private Vector3KeyFrameAnimation? openScaleAnimation;
-    private ScalarKeyFrameAnimation? openOpacityAnimation;
 
     #region Window Lifecycle
     public SelectorWindow()
@@ -66,8 +57,6 @@ public sealed partial class SelectorWindow : Window
         ViewModel = services.GetRequiredService<SelectorPageViewModel>();
         quickViewService = services.GetRequiredService<IQuickViewService>();
         settingsService = services.GetRequiredService<ISettingsService>();
-        ViewModel.BrowserLaunched += ViewModel_BrowserLaunched;
-        ViewModel.PropertyChanged += ViewModel_PropertyChanged;
         hwnd = WindowNative.GetWindowHandle(this);
 
         var presenter = OverlappedPresenter.Create();
@@ -79,21 +68,23 @@ public sealed partial class SelectorWindow : Window
         AppWindow.SetPresenter(presenter);
         AppWindow.IsShownInSwitchers = false;
 
-        Activated += Window_Activated;
-        Closed += SelectorWindow_Closed;
-
         InitializeComponent();
-        ViewModel.Browsers.CollectionChanged += ViewModel_Browsers_CollectionChanged;
         SystemBackdrop = new TransparentTintBackdrop();
         RemoveWindowFrame();
-        backdropLayer = new BackdropShapeLayer(hwnd);
+        backdropLayer = new BackdropShapeLayer(PlateShadowHost, SelectorPlate);
+        metrics = RadialMetrics.For(ViewModel.Browsers.Count);
+        layout = EffectiveLayout(PreferredLayout, metrics, openingCursor);
+        ApplyLayout();
+        Select(selectedIndex);
+
+        ViewModel.BrowserLaunched += ViewModel_BrowserLaunched;
+        ViewModel.PropertyChanged += ViewModel_PropertyChanged;
+        ViewModel.Browsers.CollectionChanged += ViewModel_Browsers_CollectionChanged;
         DiscRoot.ActualThemeChanged += DiscRoot_ActualThemeChanged;
         AppWindow.Changed += AppWindow_Changed;
         settingsService.SettingsChanged += SettingsChanged;
-        metrics = RadialMetrics.For(ViewModel.Browsers.Count);
-        layout = ViewModel.AppSettings.SelectorLayout == SelectorLayout.List ? SelectorLayout.List : SelectorLayout.Radial;
-        ApplyLayout();
-        Select(selectedIndex);
+        Activated += Window_Activated;
+        Closed += SelectorWindow_Closed;
     }
 
     public void Init(CliArgs args)
@@ -117,7 +108,6 @@ public sealed partial class SelectorWindow : Window
         }
 
 #if DEBUG
-        // No minimize on debug when not in focus
 #else
         if (ViewModel.AppSettings.MinimizeOnFocusLoss)
         {
@@ -144,8 +134,6 @@ public sealed partial class SelectorWindow : Window
         AppWindow.Changed -= AppWindow_Changed;
         DiscRoot.ActualThemeChanged -= DiscRoot_ActualThemeChanged;
         Activated -= Window_Activated;
-        openScaleAnimation?.Dispose();
-        openOpacityAnimation?.Dispose();
         backdropLayer.Dispose();
     }
     #endregion
@@ -166,18 +154,15 @@ public sealed partial class SelectorWindow : Window
         ViewModel.RefreshAppSettings();
         ViewModel.RefreshBrowsers();
         state = SelectorState.Shown;
+        openingCursor = CursorPosition.Capture();
         ApplyMetrics();
         Select(0);
-        openingCursor = CursorPosition.Capture();
         var bounds = openingCursor.Place(Geometry);
         AppWindow.MoveAndResize(bounds);
-        if (layout == SelectorLayout.List)
-        {
-            Bindings.Update();
-            UpdateShape();
-            BrowserScroll.ChangeView(null, 0, null, true);
-            DiscRoot.UpdateLayout();
-        }
+        Bindings.Update();
+        UpdateShape();
+        if (layout == SelectorLayout.List) BrowserScroll.ChangeView(null, 0, null, true);
+        DiscRoot.UpdateLayout();
         AppWindow.Show();
         AppWindow.MoveAndResize(bounds);
         UpdateShape();
@@ -186,7 +171,6 @@ public sealed partial class SelectorWindow : Window
         this.SetForegroundWindow();
         DiscRoot.UpdateLayout();
         FocusSelection();
-        if (layout == SelectorLayout.Radial) PlayOpenAnimation();
     }
 
     private void ResizeForLayout()
@@ -228,7 +212,7 @@ public sealed partial class SelectorWindow : Window
     private bool ApplyMetrics()
     {
         var next = RadialMetrics.For(ViewModel.Browsers.Count);
-        var nextLayout = ViewModel.AppSettings.SelectorLayout == SelectorLayout.List ? SelectorLayout.List : SelectorLayout.Radial;
+        var nextLayout = EffectiveLayout(PreferredLayout, next, openingCursor);
         bool changed = metrics != next || layout != nextLayout;
         if (changed)
         {
@@ -239,6 +223,14 @@ public sealed partial class SelectorWindow : Window
         Select(selectedIndex);
         return changed;
     }
+
+    internal static SelectorGeometry GeometryFor(SelectorLayout layout, RadialMetrics metrics) => layout == SelectorLayout.List
+        ? new(ListMetrics.WindowWidth, ListMetrics.WindowHeight(metrics.Count), ListMetrics.Anchor, SelectorPlacement.BesideCursor)
+        : new(metrics.WindowWidth, metrics.WindowHeight, metrics.FlowerCenter, SelectorPlacement.Centered);
+
+    internal static SelectorLayout EffectiveLayout(SelectorLayout preferred, RadialMetrics metrics, CursorSnapshot opening)
+        => preferred != SelectorLayout.List && opening.Fits(GeometryFor(SelectorLayout.Radial, metrics))
+            ? SelectorLayout.Radial : SelectorLayout.List;
 
     private void ApplyLayout()
     {
@@ -252,6 +244,7 @@ public sealed partial class SelectorWindow : Window
 
     private void ApplyRadialLayout()
     {
+        NamePill.UseLayoutRounding = false;
         NamePill.Translation = Vector3.Zero;
         FlowerHost.Width = metrics.FlowerSize;
         FlowerHost.Height = metrics.FlowerHeight;
@@ -259,12 +252,14 @@ public sealed partial class SelectorWindow : Window
         NamePill.Width = metrics.PillWidth;
         NamePill.Height = RadialMetrics.PillHeight;
         NamePill.Margin = new Thickness(0, metrics.PillTop, 0, 0);
+        HubButton.Margin = new Thickness(0, metrics.FlowerOrigin.Y - RadialMetrics.HubRadius, 0, 0);
         HubButton.Visibility = metrics.CenterFillRadius > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void ApplyListLayout()
     {
         EmptyListMessage.Visibility = metrics.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        NamePill.UseLayoutRounding = true;
         NamePill.Height = ListMetrics.FooterHeight;
         NamePill.Translation = new Vector3(0, 0, 16);
         var visual = ElementCompositionPreview.GetElementVisual(NamePill);
@@ -279,6 +274,7 @@ public sealed partial class SelectorWindow : Window
         var bounds = ListMetrics.Bounds(size.Width / scale, size.Height / scale);
         ListHost.Width = bounds.Width;
         ListHost.Height = bounds.Height;
+        BrowserScroll.MaxHeight = ListMetrics.ViewportHeight(size.Height, scale);
         NamePill.Width = Math.Max(0, bounds.Width - 2 * ListMetrics.Padding);
         NamePill.Margin = new Thickness(0,
             size.Height / scale - ListMetrics.ShadowMargin - ListMetrics.Padding - ListMetrics.FooterHeight, 0, 0);
@@ -300,7 +296,8 @@ public sealed partial class SelectorWindow : Window
         var pixelSize = new Vector2(size.Width, size.Height);
         if (layout == SelectorLayout.Radial)
         {
-            backdropLayer.SetShape(BackdropShape.FromMetrics(metrics, pixelSize), isDark);
+            backdropLayer.SetShape(BackdropShape.FromMetrics(metrics,
+                new Vector2((float)metrics.WindowWidth, (float)metrics.WindowHeight)), isDark);
         }
 
         // GDI regions are aliased, so the region extends past the antialiased edge to hold the drop shadow.
@@ -342,52 +339,6 @@ public sealed partial class SelectorWindow : Window
         DwmSetWindowAttribute(hwnd, DwmaBorderColor, ref noBorder, sizeof(int));
     }
 
-    private void PlayOpenAnimation()
-    {
-        if (!AnimationSettings.AnimationsEnabled)
-        {
-            return;
-        }
-
-        var size = AppWindow.Size;
-        float scale = (float)(size.Width / metrics.WindowWidth);
-        var origin = metrics.FlowerCenter;
-        backdropLayer.PlayOpenAnimation(
-            new Vector2((float)origin.X, (float)origin.Y) * scale, OpenAnimationDuration);
-
-        var flowerVisual = ElementCompositionPreview.GetElementVisual(FlowerHost);
-        EnsureOpenAnimations(flowerVisual.Compositor);
-        var scaleAnimation = openScaleAnimation!;
-        var opacityAnimation = openOpacityAnimation!;
-        flowerVisual.CenterPoint = new Vector3((float)metrics.FlowerOrigin.X, (float)metrics.FlowerOrigin.Y, 0);
-        flowerVisual.StartAnimation("Scale", scaleAnimation);
-        flowerVisual.StartAnimation("Opacity", opacityAnimation);
-
-        var pillVisual = ElementCompositionPreview.GetElementVisual(NamePill);
-        pillVisual.CenterPoint = new Vector3(
-            (float)metrics.PillWidth / 2, (float)(metrics.FlowerCenter.Y - metrics.PillTop), 0);
-        pillVisual.StartAnimation("Scale", scaleAnimation);
-        pillVisual.StartAnimation("Opacity", opacityAnimation);
-    }
-
-    private void EnsureOpenAnimations(Compositor compositor)
-    {
-        if (openScaleAnimation is not null && openOpacityAnimation is not null)
-        {
-            return;
-        }
-
-        var easing = compositor.CreateCubicBezierEasingFunction(new Vector2(0.16f, 1f), new Vector2(0.3f, 1f));
-        openScaleAnimation = compositor.CreateVector3KeyFrameAnimation();
-        openScaleAnimation.InsertKeyFrame(0f, new Vector3(0.82f, 0.82f, 1));
-        openScaleAnimation.InsertKeyFrame(1f, Vector3.One, easing);
-        openScaleAnimation.Duration = OpenAnimationDuration;
-
-        openOpacityAnimation = compositor.CreateScalarKeyFrameAnimation();
-        openOpacityAnimation.InsertKeyFrame(0f, 0f);
-        openOpacityAnimation.InsertKeyFrame(1f, 1f, easing);
-        openOpacityAnimation.Duration = OpenAnimationDuration;
-    }
     #endregion
 
     #region Selection
@@ -413,28 +364,36 @@ public sealed partial class SelectorWindow : Window
 
     private void FocusSelection()
     {
-        if (ViewModel.Browsers.Count == 0) NamePill.Focus(FocusState.Programmatic);
+        if (ViewModel.Browsers.Count == 0)
+        {
+            if (layout == SelectorLayout.List) ManageBrowsersButton.Focus(FocusState.Programmatic);
+            else NamePill.Focus(FocusState.Programmatic);
+        }
         else FocusBrowser(selectedIndex, FocusState.Programmatic);
     }
 
     private void FocusBrowser(int index, FocusState focusState)
     {
+        if (layout == SelectorLayout.List)
+        {
+            RevealListItem(index);
+            DiscRoot.UpdateLayout();
+        }
         var element = layout == SelectorLayout.List ? Items.GetOrCreateElement(index) : Items.TryGetElement(index);
         if (element is not BrowserItemControl item)
         {
             NamePill.Focus(focusState);
             return;
         }
-        if (layout == SelectorLayout.List) Items.UpdateLayout();
         item.FocusItem(focusState);
-        if (layout == SelectorLayout.List)
-        {
-            // Reveal fixed-height rows directly, without relying on a newly realized element's layout.
-            double top = index * ListMetrics.RowHeight;
-            double offset = Math.Min(top, Math.Max(BrowserScroll.VerticalOffset,
-                top + ListMetrics.RowHeight - BrowserScroll.ViewportHeight));
-            BrowserScroll.ChangeView(null, offset, null, true);
-        }
+    }
+
+    private void RevealListItem(int index)
+    {
+        double top = index * ListMetrics.RowHeight;
+        double offset = Math.Min(top, Math.Max(BrowserScroll.VerticalOffset,
+            top + ListMetrics.RowHeight - BrowserScroll.ViewportHeight));
+        BrowserScroll.ChangeView(null, offset, null, true);
     }
 
     private void UpdatePill()
@@ -446,7 +405,9 @@ public sealed partial class SelectorWindow : Window
             : uri.Host.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ? uri.Host[4..] : uri.Host;
 
         PillTitle.Text = string.IsNullOrEmpty(link) ? "Choose a browser" : link;
-        PillHost.Text = ViewModel.Url;
+        PillHost.Text = layout == SelectorLayout.List && hasUrl
+            && (uri!.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+                ? uri.PathAndQuery + uri.Fragment : ViewModel.Url;
         PillLock.Visibility = hasUrl && uri!.Scheme == Uri.UriSchemeHttps ? Visibility.Visible : Visibility.Collapsed;
         PillLink.Visibility = string.IsNullOrEmpty(link) ? Visibility.Collapsed : Visibility.Visible;
     }
@@ -488,12 +449,16 @@ public sealed partial class SelectorWindow : Window
         }
     }
 
+    private void DiscRoot_FocusChanged(object sender, RoutedEventArgs e)
+        => SelectionOutline.StrokeThickness = GetFocusedItemIndex() >= 0 ? 2 : 0;
+
     private void BrowserItem_GotFocus(object sender, RoutedEventArgs e)
     {
         int focused = GetFocusedItemIndex();
         if (focused >= 0 && sender is BrowserItemControl item && Items.GetElementIndex(item) == focused)
         {
             Select(focused);
+            if (layout == SelectorLayout.List) RevealListItem(focused);
         }
     }
 
@@ -596,6 +561,8 @@ public sealed partial class SelectorWindow : Window
     private void EditUrlBtnClick(object sender, RoutedEventArgs e) => ShowEditUrlFlyout();
 
     private void SettingsBtnClick(object sender, RoutedEventArgs e) => App.ShowSettings(SettingsTab.Settings);
+
+    private void ManageBrowsersBtnClick(object sender, RoutedEventArgs e) => App.ShowSettings(SettingsTab.Browsers);
 
     private void RulesBtnClick(object sender, RoutedEventArgs e) => App.ShowSettings(SettingsTab.Rulesets);
 
