@@ -126,8 +126,10 @@ internal static class ConstrainedListChecks
                 FormattableString.Invariant($"native frame scroller applies the allocated extent {at} (extent {frameScroll.ExtentHeight}/{frame.Extent}, viewport {frameScroll.ViewportHeight}/{frame.Height})"));
             expect(window.ViewModel.Browsers.Count(item => item.Profile is not null) == Enumerable.Range(0, count).Count(index => index % 3 != 1),
                 $"profiled entries are present after the constrained reopen {at}");
+            await SettleFocusAsync();
             frameScroll.ChangeView(null, frameScroll.ScrollableHeight, null, true);
-            expect(await VisibleAsync(card), $"scrolling the frame to its end shows the whole footer {at}");
+            expect(await VisibleAsync(card), FormattableString.Invariant(
+                $"scrolling the frame to its end shows the whole footer {at} (card {Bounds(card, root)}, visible {Visible()}, frame offset {frameScroll.VerticalOffset}/{frameScroll.ScrollableHeight})"));
             frameScroll.ChangeView(null, 0, null, true);
             var body = (FrameworkElement)root.FindName("ListBody");
             expect(await VisibleAsync(body), FormattableString.Invariant(
@@ -184,6 +186,18 @@ internal static class ConstrainedListChecks
             && (row.BrowserItem?.Profile is null || row.FindName("ProfileBadge") is FrameworkElement { Visibility: Visibility.Visible } avatar
                 && Inside(Bounds(avatar, root), Bounds(row, root))));
 
+        async Task SettleFocusAsync()
+        {
+            object? previous = null;
+            for (int attempt = 0; attempt < 20; attempt++)
+            {
+                object? focused = FocusManager.GetFocusedElement(root.XamlRoot);
+                if (focused is not null && ReferenceEquals(focused, previous)) return;
+                previous = focused;
+                await Task.Delay(100);
+            }
+        }
+
         async Task<bool> VisibleAsync(FrameworkElement element)
             => await PollAsync(() => element.ActualHeight > 0 && Inside(Bounds(element, root), Visible()));
 
@@ -237,6 +251,30 @@ internal static class ConstrainedListChecks
         expect(await PollAsync(() => flower.Visibility == Visibility.Collapsed && card.Translation.Z == 16),
             "switching back to List restores the pinned footer");
         expect(card.FocusState == FocusState.Keyboard, $"the List footer keeps keyboard focus after the switch ({card.FocusState})");
+        settings.UpdateAppSettings(new AppSettings { SelectorLayout = SelectorLayout.Radial });
+        pixels = (int)Math.Floor(150 * raster);
+        var constrained = new CursorSnapshot(new PointInt32(400, pixels / 2), new RectInt32(0, 0, 3840, pixels), raster);
+        window.ShowWindow(constrained);
+        await Task.Delay(150);
+        card.Focus(FocusState.Keyboard);
+        expect(await PollAsync(() => flower.Visibility == Visibility.Collapsed && ReferenceEquals(VisualTreeHelper.GetParent(card), content)
+                && frameScroll.VerticalOffset > 0.5),
+            "a Radial preference on a short work area falls back to a scrolling List frame that owns and reveals the footer");
+        window.ShowWindow(CursorPosition.Capture() with { WorkArea = null });
+        await Task.Delay(150);
+        var radial = RadialMetrics.For(window.ViewModel.Browsers.Count);
+        expect(flower.Visibility == Visibility.Visible && ReferenceEquals(VisualTreeHelper.GetParent(card), root)
+            && root.Children.IndexOf(card) == root.Children.IndexOf(flower) + 1,
+            "reopening Radial returns the footer from the List frame to its root stacking position");
+        expect(card.Width == radial.PillWidth && card.Height == RadialMetrics.PillHeight && card.Margin.Top == radial.PillTop
+            && card.Translation == System.Numerics.Vector3.Zero,
+            FormattableString.Invariant($"the returned Radial footer uses Radial geometry ({card.Width}x{card.Height} at {card.Margin.Top})"));
+        window.ShowWindow(constrained);
+        await Task.Delay(150);
+        card.Focus(FocusState.Keyboard);
+        expect(await PollAsync(() => ReferenceEquals(VisualTreeHelper.GetParent(card), content) && frameScroll.VerticalOffset > 0.5),
+            "reopening on the short work area moves the footer back into the frame and reveals it");
+        settings.UpdateAppSettings(new AppSettings { SelectorLayout = SelectorLayout.List });
         window.MinimizeWindow();
     }
 

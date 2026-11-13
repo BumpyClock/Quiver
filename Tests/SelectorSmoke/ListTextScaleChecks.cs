@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Quiver.App.Controls;
 using Quiver.App.ViewModels;
@@ -102,6 +103,8 @@ internal static class ListTextScaleChecks
         if (failures.Count > 0)
             throw new Exception("List text-scale checks failed:\n  " + string.Join("\n  ", failures.Distinct()));
         Console.WriteLine("PASS: List text scale 1-2.25 (row text, keycaps, initials, recovery, footer, whole rows, wrap reveal, tooltips).");
+        Console.WriteLine(FormattableString.Invariant(
+            $"PASS: constrained native List frames in simulated {Math.Floor(200 * root.XamlRoot.RasterizationScale)}px and {Math.Floor(680 / 3.0 * root.XamlRoot.RasterizationScale)}px work areas at raster {root.XamlRoot.RasterizationScale} (200 and 226 DIP, equivalent to 600px and 680px at 300%; no DPI setting changed): reachable rows, recovery and footer, wrap reveal, Tab, restoration, live reparenting and List/Radial switching."));
 
         void Populate(int count)
         {
@@ -224,8 +227,11 @@ internal static class ListTextScaleChecks
             bool revealed = await PollAsync(() => ring.TryGetElement(29) is ListBrowserItem { IsSelected: true } last
                 && last.TransformToVisual(scroll).TransformPoint(default).Y is var top
                 && top >= -0.5 && top + last.ActualHeight <= scroll.ViewportHeight + 0.5);
+            int selected = Enumerable.Range(0, 30).FirstOrDefault(index => ring.TryGetElement(index) is ListBrowserItem { IsSelected: true }, -1);
+            var focused = FocusManager.GetFocusedElement(root.XamlRoot) as DependencyObject;
+            while (focused is not null and not ListBrowserItem) focused = VisualTreeHelper.GetParent(focused);
             string detail = FormattableString.Invariant(
-                $"{at} (offset {scroll.VerticalOffset}, scrollable {scroll.ScrollableHeight}, extent {scroll.ExtentHeight}/{rows}, viewport {scroll.ViewportHeight})");
+                $"{at} (offset {scroll.VerticalOffset}, scrollable {scroll.ScrollableHeight}, extent {scroll.ExtentHeight}/{rows}, viewport {scroll.ViewportHeight}, selected {selected}, focused {(focused is ListBrowserItem item ? ring.GetElementIndex(item) : -1)})");
             Expect(revealed, "wrapped last row is fully revealed " + detail);
             Expect(window.NavigateSelection(VirtualKey.Down), $"Down wraps to the first row {at}");
             Expect(await PollAsync(() => scroll.VerticalOffset < 1 && ring.TryGetElement(0) is ListBrowserItem { IsSelected: true }),
