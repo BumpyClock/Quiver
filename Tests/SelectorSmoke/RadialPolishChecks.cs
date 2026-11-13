@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml.Media;
 using Windows.Graphics.Imaging;
 using System.Runtime.InteropServices.WindowsRuntime;
 using Quiver.App.Controls;
+using Quiver.App.Helpers;
 using Quiver.App.Services;
 using Quiver.App.ViewModels;
 using Quiver.App.Windows;
@@ -33,6 +34,8 @@ internal static partial class RadialPolishChecks
     {
         string? directory = Environment.GetEnvironmentVariable("QUIVER_SELECTOR_CAPTURE_DIRECTORY");
         var root = (FrameworkElement)window.Content;
+        var opening = CursorPosition.Capture() with { WorkArea = null };
+        Console.WriteLine($"Radial rendering fixture uses an unconstrained work area at scale {opening.Scale:F3}; monitor-fit checks run separately.");
         settings.UpdateAppSettings(new AppSettings { SelectorLayout = SelectorLayout.Radial });
         var loader = new IconLoaderService(Path.Combine(AppContext.BaseDirectory, "polish-icon-cache"));
         Microsoft.UI.Xaml.Media.Imaging.BitmapImage? edgeIcon;
@@ -68,7 +71,7 @@ internal static partial class RadialPolishChecks
                 CompositionTarget.Rendering += rendered;
                 try
                 {
-                    window.ShowWindow();
+                    window.ShowWindow(opening);
                     double returned = clock.Elapsed.TotalMilliseconds;
                     CheckImmediatePresentation(window, root);
                     var visual = ElementCompositionPreview.GetElementVisual((FrameworkElement)root.FindName("FlowerHost"));
@@ -91,7 +94,7 @@ internal static partial class RadialPolishChecks
 
         if (Environment.GetEnvironmentVariable("QUIVER_SELECTOR_SOLVE_SPACING") == "1")
         {
-            window.ShowWindow();
+            window.ShowWindow(opening);
             CheckImmediatePresentation(window, root);
             if (directory is null) window.AppWindow.Move(new PointInt32(-32000, -32000));
             SolveSpacing((ItemsRepeater)root.FindName("BrowserRing"));
@@ -107,7 +110,7 @@ internal static partial class RadialPolishChecks
                 for (int i = 0; i < count; i++)
                     settings.LoadSettings().Browsers.Add(new Browser(i == 2 ? "Google Chrome" : $"Browser {i + 1}", $"fixture-{i}.exe"));
                 window.ViewModel.RefreshBrowsers();
-                window.ShowWindow();
+                window.ShowWindow(opening);
                 CheckImmediatePresentation(window, root);
                 if (count == 2) await CheckDeferredArrangementIsRejectedAsync(window, root);
                 if (directory is null) window.AppWindow.Move(new PointInt32(-32000, -32000));
@@ -165,6 +168,9 @@ internal static partial class RadialPolishChecks
 
     private static void CheckImmediatePresentation(SelectorWindow window, FrameworkElement root)
     {
+        Check(((FrameworkElement)root.FindName("FlowerHost")).Visibility == Visibility.Visible
+            && ((FrameworkElement)root.FindName("ListHost")).Visibility == Visibility.Collapsed,
+            "unconstrained rendering fixture selects Radial for every browser count");
         var visual = ElementCompositionPreview.GetElementVisual((FrameworkElement)root.FindName("FlowerHost"));
         Check(visual.TryGetAnimationController("Opacity") is null
             && visual.TryGetAnimationController("Scale") is null

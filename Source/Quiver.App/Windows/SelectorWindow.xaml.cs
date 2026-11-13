@@ -151,10 +151,16 @@ public sealed partial class SelectorWindow : Window
     public void ShowWindow()
     {
         if (state == SelectorState.Closed) return;
+        ShowWindow(CursorPosition.Capture());
+    }
+
+    internal void ShowWindow(CursorSnapshot opening)
+    {
+        if (state == SelectorState.Closed) return;
+        openingCursor = opening;
         ViewModel.RefreshAppSettings();
         ViewModel.RefreshBrowsers();
         state = SelectorState.Shown;
-        openingCursor = CursorPosition.Capture();
         ApplyMetrics();
         Select(0);
         var bounds = openingCursor.Place(Geometry);
@@ -181,7 +187,7 @@ public sealed partial class SelectorWindow : Window
             return;
         }
 
-        var previous = Geometry.Anchor;
+        var previous = Geometry;
         bool changed = ApplyMetrics();
         if (state == SelectorState.Hidden)
         {
@@ -190,21 +196,7 @@ public sealed partial class SelectorWindow : Window
 
         if (changed)
         {
-            if (layout == SelectorLayout.List)
-            {
-                AppWindow.MoveAndResize(openingCursor.Place(Geometry));
-            }
-            else
-            {
-                var current = AppWindow.Position;
-                double scale = DiscRoot.XamlRoot?.RasterizationScale ?? 1.0;
-                var geometry = Geometry;
-                AppWindow.MoveAndResize(new RectInt32(
-                    current.X + (int)Math.Round((previous.X - geometry.Anchor.X) * scale),
-                    current.Y + (int)Math.Round((previous.Y - geometry.Anchor.Y) * scale),
-                    (int)Math.Round(geometry.Width * scale),
-                    (int)Math.Round(geometry.Height * scale)));
-            }
+            AppWindow.MoveAndResize(openingCursor.Resize(previous, Geometry, AppWindow.Position));
         }
         UpdateShape();
     }
@@ -398,18 +390,11 @@ public sealed partial class SelectorWindow : Window
 
     private void UpdatePill()
     {
-        bool hasUrl = Uri.TryCreate(ViewModel.Url, UriKind.Absolute, out var uri);
-        string link = !hasUrl ? ViewModel.Url ?? string.Empty
-            : uri!.IsFile ? System.IO.Path.GetFileName(uri.LocalPath)
-            : string.IsNullOrEmpty(uri.Host) ? ViewModel.Url
-            : uri.Host.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ? uri.Host[4..] : uri.Host;
-
-        PillTitle.Text = string.IsNullOrEmpty(link) ? "Choose a browser" : link;
-        PillHost.Text = layout == SelectorLayout.List && hasUrl
-            && (uri!.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
-                ? uri.PathAndQuery + uri.Fragment : ViewModel.Url;
-        PillLock.Visibility = hasUrl && uri!.Scheme == Uri.UriSchemeHttps ? Visibility.Visible : Visibility.Collapsed;
-        PillLink.Visibility = string.IsNullOrEmpty(link) ? Visibility.Collapsed : Visibility.Visible;
+        var address = SelectorAddress.For(ViewModel.Url, layout == SelectorLayout.List);
+        PillTitle.Text = string.IsNullOrEmpty(address.Title) ? "Choose a browser" : address.Title;
+        PillHost.Text = address.Detail;
+        PillLock.Visibility = address.IsSecure ? Visibility.Visible : Visibility.Collapsed;
+        PillLink.Visibility = string.IsNullOrEmpty(address.Title) ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void HubButton_Click(object sender, RoutedEventArgs e) => LinkMenu.ShowAt(HubButton);

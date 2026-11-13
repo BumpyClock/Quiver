@@ -17,6 +17,17 @@ internal readonly record struct CursorSnapshot(PointInt32 Position, RectInt32? W
     public bool Fits(SelectorGeometry geometry) => WorkArea is not { } area
         || (CursorPosition.NativeLength(geometry.Width, Scale) <= area.Width
             && CursorPosition.NativeLength(geometry.Height, Scale) <= area.Height);
+
+    public RectInt32 Resize(SelectorGeometry previous, SelectorGeometry next, PointInt32 position)
+    {
+        if (previous.Placement != next.Placement || next.Placement == SelectorPlacement.BesideCursor)
+            return Place(next);
+
+        return CursorPosition.ClampBounds(new RectInt32(
+            position.X + CursorPosition.NativeLength(previous.Anchor.X, Scale) - CursorPosition.NativeLength(next.Anchor.X, Scale),
+            position.Y + CursorPosition.NativeLength(previous.Anchor.Y, Scale) - CursorPosition.NativeLength(next.Anchor.Y, Scale),
+            CursorPosition.NativeLength(next.Width, Scale), CursorPosition.NativeLength(next.Height, Scale)), WorkArea);
+    }
 }
 
 internal static partial class CursorPosition
@@ -63,10 +74,18 @@ internal static partial class CursorPosition
                 if (x + width > area.X + area.Width)
                     x = cursor.X - width + NativeLength(anchorDips.X, scale);
             }
-            x = Math.Clamp(x, area.X, Math.Max(area.X, area.X + area.Width - width));
-            y = Math.Clamp(y, area.Y, Math.Max(area.Y, area.Y + area.Height - height));
         }
-        return new RectInt32(x, y, width, height);
+        return ClampBounds(new RectInt32(x, y, width, height), workArea);
+    }
+
+    internal static RectInt32 ClampBounds(RectInt32 bounds, RectInt32? workArea)
+    {
+        if (workArea is { } area)
+        {
+            bounds.X = Math.Clamp(bounds.X, area.X, Math.Max(area.X, area.X + area.Width - bounds.Width));
+            bounds.Y = Math.Clamp(bounds.Y, area.Y, Math.Max(area.Y, area.Y + area.Height - bounds.Height));
+        }
+        return bounds;
     }
 
     internal static int NativeLength(double dips, double scale) => (int)Math.Round(dips * scale);

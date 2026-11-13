@@ -16,6 +16,7 @@ internal static class SelectorFitChecks
     {
         CheckListViewportRows();
         CheckRadialFit();
+        SelectorPlacementChecks.Run();
         Console.WriteLine("PASS: List viewport rows across DPI 97-480 and fit-aware radial fallback bounds.");
     }
 
@@ -157,21 +158,25 @@ internal static class SelectorFitChecks
         {
             window.MinimizeWindow();
             await Task.Delay(50);
-            window.ShowWindow();
             var opening = CursorPosition.Capture();
-            Check(flower.Visibility == Visibility.Visible, "two browsers open in the preferred radial picker");
+            window.ShowWindow(opening);
+            var initial = SelectorWindow.EffectiveLayout(SelectorLayout.Radial, RadialMetrics.For(browsers.Count), opening);
+            CheckLayout(initial, "initial opening");
+            Check(InsideWorkArea(window, opening), "initial picker stays within the opening work area");
             for (int i = browsers.Count; i < 30; i++)
                 browsers.Add(new Browser($"Fit {i + 1}", $"fit-fixture-{i}.exe"));
             window.ViewModel.RefreshBrowsers();
             var expected = SelectorWindow.EffectiveLayout(SelectorLayout.Radial, RadialMetrics.For(30), opening);
             await SmokeApplication.WaitForAsync(() => (expected == SelectorLayout.List) == (list.Visibility == Visibility.Visible)
-                && (expected == SelectorLayout.Radial) == (flower.Visibility == Visibility.Visible),
+                && (expected == SelectorLayout.Radial) == (flower.Visibility == Visibility.Visible) && HasSize(expected, 30),
                 $"collection refresh applies the opening snapshot's effective {expected} layout");
             Check(InsideWorkArea(window, opening), "refreshed picker stays within the opening work area");
             window.MinimizeWindow();
-            window.ShowWindow();
-            Check((expected == SelectorLayout.List) == (list.Visibility == Visibility.Visible),
-                $"reopening with thirty browsers keeps the effective {expected} layout");
+            opening = CursorPosition.Capture();
+            window.ShowWindow(opening);
+            expected = SelectorWindow.EffectiveLayout(SelectorLayout.Radial, RadialMetrics.For(30), opening);
+            CheckLayout(expected, "reopening with thirty browsers");
+            Check(InsideWorkArea(window, opening), "reopened picker stays within the opening work area");
             if (expected == SelectorLayout.List)
             {
                 Check(((ItemsRepeater)root.FindName("BrowserList")).TryGetElement(0) is ListBrowserItem { IsSelected: true },
@@ -180,15 +185,33 @@ internal static class SelectorFitChecks
             }
             Check(settings.LoadSettings().AppSettings.SelectorLayout == SelectorLayout.Radial,
                 "fit fallback never rewrites the stored radial preference");
-            window.MinimizeWindow();
             while (browsers.Count > 2) browsers.RemoveAt(browsers.Count - 1);
             window.ViewModel.RefreshBrowsers();
-            await Task.Delay(50);
-            window.ShowWindow();
-            Check(flower.Visibility == Visibility.Visible && list.Visibility == Visibility.Collapsed,
-                "the next opening that fits regains the radial picker");
+            var recovered = SelectorWindow.EffectiveLayout(SelectorLayout.Radial, RadialMetrics.For(browsers.Count), opening);
+            await SmokeApplication.WaitForAsync(() => (recovered == SelectorLayout.List) == (list.Visibility == Visibility.Visible)
+                && (recovered == SelectorLayout.Radial) == (flower.Visibility == Visibility.Visible) && HasSize(recovered, browsers.Count),
+                $"visible recovery applies the opening snapshot's effective {recovered} layout");
+            Check(InsideWorkArea(window, opening), "visible recovery stays within the opening work area");
+            window.MinimizeWindow();
+            opening = CursorPosition.Capture();
+            window.ShowWindow(opening);
+            recovered = SelectorWindow.EffectiveLayout(SelectorLayout.Radial, RadialMetrics.For(browsers.Count), opening);
+            CheckLayout(recovered, "reopening with two browsers");
+            Check(InsideWorkArea(window, opening), "recovered opening stays within the opening work area");
             Console.WriteLine(FormattableString.Invariant(
-                $"PASS: native fit fallback (thirty browsers -> {expected} at scale {opening.Scale:F3}, work area {(opening.WorkArea is { } area ? Describe(area) : "unknown")}), stored preference kept, radial regained."));
+                $"PASS: native fit fallback (initial {initial}, thirty browsers {expected}, recovered {recovered} at scale {opening.Scale:F3}, work area {(opening.WorkArea is { } area ? Describe(area) : "unknown")}), stored preference kept."));
+            await CheckVisiblePlacementAsync(window, settings);
+
+            void CheckLayout(SelectorLayout layout, string stage)
+                => Check((layout == SelectorLayout.List) == (list.Visibility == Visibility.Visible)
+                    && (layout == SelectorLayout.Radial) == (flower.Visibility == Visibility.Visible),
+                    $"{stage} uses the opening work area's effective {layout} layout");
+
+            bool HasSize(SelectorLayout layout, int count)
+            {
+                var bounds = opening.Place(SelectorWindow.GeometryFor(layout, RadialMetrics.For(count)));
+                return window.AppWindow.Size.Width == bounds.Width && window.AppWindow.Size.Height == bounds.Height;
+            }
         }
         finally
         {
@@ -199,6 +222,59 @@ internal static class SelectorFitChecks
             settings.UpdateAppSettings(preference);
             await Task.Delay(50);
         }
+    }
+
+    private static async Task CheckVisiblePlacementAsync(SelectorWindow window, TestSettings settings)
+    {
+        var root = (FrameworkElement)window.Content;
+        var flower = (FrameworkElement)root.FindName("FlowerHost");
+        var list = (FrameworkElement)root.FindName("ListHost");
+        var browsers = settings.LoadSettings().Browsers;
+        var captured = CursorPosition.Capture();
+        var pair = SelectorWindow.GeometryFor(SelectorLayout.Radial, RadialMetrics.For(2));
+        var ten = SelectorWindow.GeometryFor(SelectorLayout.Radial, RadialMetrics.For(10));
+        int width = CursorPosition.NativeLength(ten.Width, captured.Scale) + 120;
+        int height = CursorPosition.NativeLength(ten.Height, captured.Scale) + 80;
+        foreach (var origin in new[] { new PointInt32(0, 0), new PointInt32(-3840, -2160), new PointInt32(2560, -1440) })
+        {
+            var area = new RectInt32(origin.X, origin.Y, width, height);
+            foreach (var cursor in new[]
+            {
+                new PointInt32(area.X, area.Y), new PointInt32(area.X + width - 1, area.Y),
+                new PointInt32(area.X, area.Y + height - 1), new PointInt32(area.X + width - 1, area.Y + height - 1),
+            })
+            {
+                window.MinimizeWindow();
+                SetCount(30);
+                var opening = new CursorSnapshot(cursor, area, captured.Scale);
+                window.ShowWindow(opening);
+                Check(list.Visibility == Visibility.Visible && flower.Visibility == Visibility.Collapsed,
+                    "controlled corner fixture opens thirty browsers in fallback List");
+                Check(InsideWorkArea(window, opening), "controlled fallback List stays in the supplied work area");
+                SetCount(2);
+                var recovered = opening.Place(pair);
+                await SmokeApplication.WaitForAsync(() => At(recovered),
+                    $"visible List-to-Radial recovery follows the supplied opening at {cursor.X},{cursor.Y}");
+                Check(InsideWorkArea(window, opening), "visible recovered Radial stays inside the supplied work area");
+                SetCount(10);
+                var grown = opening.Resize(pair, ten, new PointInt32(recovered.X, recovered.Y));
+                await SmokeApplication.WaitForAsync(() => At(grown),
+                    $"visible two-to-ten Radial growth clamps at {cursor.X},{cursor.Y}");
+                Check(InsideWorkArea(window, opening), "grown Radial keeps complete targets and footer inside the supplied work area");
+            }
+        }
+        Console.WriteLine("PASS: native visible List-to-Radial recovery and two-to-ten Radial growth at four controlled corners and three origins.");
+
+        void SetCount(int count)
+        {
+            browsers.Clear();
+            for (int i = 0; i < count; i++) browsers.Add(new Browser($"Placement {i + 1}", $"placement-fixture-{i}.exe"));
+            window.ViewModel.RefreshBrowsers();
+        }
+
+        bool At(RectInt32 bounds) => flower.Visibility == Visibility.Visible && list.Visibility == Visibility.Collapsed
+            && window.AppWindow.Position.X == bounds.X && window.AppWindow.Position.Y == bounds.Y
+            && window.AppWindow.Size.Width == bounds.Width && window.AppWindow.Size.Height == bounds.Height;
     }
 
     private static bool InsideWorkArea(SelectorWindow window, CursorSnapshot opening)
