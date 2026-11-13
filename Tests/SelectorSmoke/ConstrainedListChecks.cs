@@ -103,14 +103,16 @@ internal static class ConstrainedListChecks
         var frameScroll = (ScrollViewer)root.FindName("ListFrameScroll");
         double raster = root.XamlRoot.RasterizationScale;
         foreach (double dips in new[] { 600 / 3.0, 680 / 3.0 })
+        foreach (bool refresh in new[] { false, true })
         {
             int pixels = (int)Math.Floor(dips * raster);
             var area = new RectInt32(0, 0, 3840, pixels);
-            window.ShowWindow(new CursorSnapshot(new PointInt32(400, pixels / 2), area, raster));
+            if (refresh) window.ViewModel.RefreshBrowsers();
+            else window.ShowWindow(new CursorSnapshot(new PointInt32(400, pixels / 2), area, raster));
             inject();
             await Task.Delay(150);
             root.UpdateLayout();
-            string at = FormattableString.Invariant($"(constrained {pixels}px at raster {raster}, count {count}, text {textScale})");
+            string at = FormattableString.Invariant($"(constrained {pixels}px at raster {raster}, count {count}, text {textScale}, refresh {refresh})");
             var size = window.AppWindow.Size;
             var position = window.AppWindow.Position;
             expect(position.Y >= 0 && position.Y + size.Height <= pixels, $"constrained List stays inside the work area {at}");
@@ -125,7 +127,7 @@ internal static class ConstrainedListChecks
                 && (frame.Scrolls ? frameScroll.ScrollableHeight > 0.5 : frameScroll.ScrollableHeight < 0.5),
                 FormattableString.Invariant($"native frame scroller applies the allocated extent {at} (extent {frameScroll.ExtentHeight}/{frame.Extent}, viewport {frameScroll.ViewportHeight}/{frame.Height})"));
             expect(window.ViewModel.Browsers.Count(item => item.Profile is not null) == Enumerable.Range(0, count).Count(index => index % 3 != 1),
-                $"profiled entries are present after the constrained reopen {at}");
+                $"profiled entries are present after constrained reopen or live refresh {at}");
             await SettleFocusAsync();
             frameScroll.ChangeView(null, frameScroll.ScrollableHeight, null, true);
             expect(await VisibleAsync(card), FormattableString.Invariant(
@@ -150,8 +152,8 @@ internal static class ConstrainedListChecks
             }
             expect(scroll.ViewportHeight >= geometry.Row - 0.5,
                 FormattableString.Invariant($"constrained List shows at least one whole row {at} (viewport {scroll.ViewportHeight}, row {geometry.Row})"));
-            var first = (ListBrowserItem)ring.GetOrCreateElement(0);
-            first.FocusItem(FocusState.Keyboard);
+            card.Focus(FocusState.Keyboard);
+            expect(window.NavigateSelection(VirtualKey.Down), $"production navigation enters the first row {at}");
             expect(await RowVisibleAsync(0), $"first row is fully visible after keyboard focus {at}");
             await CaptureAsync("first");
             expect(window.NavigateSelection(VirtualKey.Up), $"Up wraps to the last row {at}");
@@ -181,6 +183,7 @@ internal static class ConstrainedListChecks
 
         async Task<bool> RowVisibleAsync(int index) => await PollAsync(() =>
             ring.TryGetElement(index) is ListBrowserItem { IsSelected: true } row && row.ActualHeight > 0
+            && ReferenceEquals(FocusManager.GetFocusedElement(root.XamlRoot), row.FindName("LaunchButton"))
             && Inside(Bounds(row, scroll), new Rect(0, 0, scroll.ActualWidth, scroll.ViewportHeight))
             && Inside(Bounds(row, root), Visible())
             && (row.BrowserItem?.Profile is null || row.FindName("ProfileBadge") is FrameworkElement { Visibility: Visibility.Visible } avatar

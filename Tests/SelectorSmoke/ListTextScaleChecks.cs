@@ -220,11 +220,12 @@ internal static class ListTextScaleChecks
             double rows = 30 * window.ListGeometry.Row;
             Expect(await PollAsync(() => Math.Abs(scroll.ExtentHeight - rows) < 0.5),
                 FormattableString.Invariant($"uniform row extent remains exact after a live size change {at} ({scroll.ExtentHeight}/{rows})"));
-            var first = (ListBrowserItem)ring.GetOrCreateElement(0);
-            first.FocusItem(FocusState.Keyboard);
-            await Task.Delay(50);
+            card.Focus(FocusState.Keyboard);
+            Expect(window.NavigateSelection(VirtualKey.Down), $"production navigation enters the first row {at}");
+            Expect(await PollAsync(() => HasFocus(0) && scroll.VerticalOffset < 0.5),
+                $"actual first-row focus and selection converge before wrapping {at}");
             Expect(window.NavigateSelection(VirtualKey.Up), $"Up wraps to the last row {at}");
-            bool revealed = await PollAsync(() => ring.TryGetElement(29) is ListBrowserItem { IsSelected: true } last
+            bool revealed = await PollAsync(() => HasFocus(29) && ring.TryGetElement(29) is ListBrowserItem last
                 && last.TransformToVisual(scroll).TransformPoint(default).Y is var top
                 && top >= -0.5 && top + last.ActualHeight <= scroll.ViewportHeight + 0.5);
             int selected = Enumerable.Range(0, 30).FirstOrDefault(index => ring.TryGetElement(index) is ListBrowserItem { IsSelected: true }, -1);
@@ -234,9 +235,12 @@ internal static class ListTextScaleChecks
                 $"{at} (offset {scroll.VerticalOffset}, scrollable {scroll.ScrollableHeight}, extent {scroll.ExtentHeight}/{rows}, viewport {scroll.ViewportHeight}, selected {selected}, focused {(focused is ListBrowserItem item ? ring.GetElementIndex(item) : -1)})");
             Expect(revealed, "wrapped last row is fully revealed " + detail);
             Expect(window.NavigateSelection(VirtualKey.Down), $"Down wraps to the first row {at}");
-            Expect(await PollAsync(() => scroll.VerticalOffset < 1 && ring.TryGetElement(0) is ListBrowserItem { IsSelected: true }),
+            Expect(await PollAsync(() => scroll.VerticalOffset < 1 && HasFocus(0)),
                 FormattableString.Invariant($"first row is revealed after Down wrap {at} (offset {scroll.VerticalOffset})"));
         }
+
+        bool HasFocus(int index) => ring.TryGetElement(index) is ListBrowserItem { IsSelected: true } item
+            && ReferenceEquals(FocusManager.GetFocusedElement(root.XamlRoot), item.FindName("LaunchButton"));
 
         void Expect(bool condition, string name)
         {

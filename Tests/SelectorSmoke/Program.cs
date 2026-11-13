@@ -135,16 +135,15 @@ public sealed partial class SmokeApplication : Application
             {
                 root.RequestedTheme = theme;
                 root.UpdateLayout();
-                await Task.Delay(50);
                 var outline = (Microsoft.UI.Xaml.Shapes.Path)root.FindName("SelectionOutline");
                 var hub = (FontIcon)((Button)root.FindName("HubButton")).Content;
                 bool dark = theme == ElementTheme.Dark;
-                Check(IsDark(outline.Fill) == dark && IsDark(outline.Stroke) != dark
+                await WaitForAsync(() => IsDark(outline.Fill) == dark && IsDark(outline.Stroke) != dark
                     && IsDark(hub.Foreground) != dark,
                     "selection surface, outline, and hub follow live theme changes");
                 foreach (var item in new[] { first, second })
                 {
-                    Check(IsDark(((Border)item.FindName("ShortcutBadge")).Background) == dark
+                    await WaitForAsync(() => IsDark(((Border)item.FindName("ShortcutBadge")).Background) == dark
                         && IsDark(((TextBlock)item.FindName("ShortcutText")).Foreground) != dark
                         && IsDark(((TextBlock)item.FindName("PetalName")).Foreground) != dark,
                         $"selected and unselected hints and labels follow live theme changes ({theme}, "

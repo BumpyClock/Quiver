@@ -72,7 +72,10 @@ Release-note context for the next release:
 
 - List rows keep a 52 DIP minimum at normal text size and separate browser identity from the profile
   label. One measured List metric owns row, recovery-body and footer heights, viewport allocation and
-  keyboard reveal. Scalable text can grow without clipping the row or overlapping the footer. The shared
+  keyboard reveal. Scalable text can grow without clipping the row or overlapping the footer. When a
+  short work area cannot fit the pinned footer and one row or recovery body, the complete List frame
+  scrolls instead of hiding all browser choices. Keyboard focus reveals browser rows, recovery and link
+  options within that frame. Normal-height List keeps its pinned footer. The shared
   measured middle-ellipsis formatter preserves profile suffixes without splitting Unicode text elements.
   Inline profile avatars no longer cover browser artwork. Rows without number shortcuts reclaim that
   column's text width. Selection uses a stable fill; keyboard focus uses system-accent native focus ink.
@@ -81,7 +84,8 @@ Release-note context for the next release:
   rounding does not discard a whole row. List content and its footer use device-pixel layout rounding;
   the radial vector root stays unrounded. Profile text retains a native ellipsis fallback.
   List destination captions show path/query/fragment without repeating the host. The host caption
-  retains non-default HTTP(S) ports and IPv6 brackets; tooltips and UI Automation retain the complete address. The shared destination card has a
+  retains the complete HTTP(S) hostname, non-default ports and IPv6 brackets; `www` and apex hosts remain
+  distinct. Tooltips and UI Automation retain the complete address. The shared destination card has a
   subtle persistent plate and an offset system-accent focus outline. Empty List state includes Manage
   browsers with matching accent ink, offset focus treatment and extra caption clearance.
 
@@ -207,7 +211,7 @@ between lookup and focus. List reveal
 uses the measured row metric and the scroll viewer's viewport; it does not rely on the layout rectangle of
 a newly realized item. Implicit focus scrolling is disabled for the list host so a parked, force-realized
 row cannot override that reveal with a stale negative layout position. Explicit navigation and actual
-current-focus notifications share the fixed-row reveal, including focus entered through other APIs.
+current-focus notifications share the measured-row reveal, including focus entered through other APIs.
 Platform-generated pointer-entry events are ignored so layout and scrolling do
 not replace keyboard selection; actual pointer and touch events keep their existing behavior.
 A short-window fixture followed by
@@ -228,7 +232,10 @@ negative origins and multiple scales. List dimensions have one writer based on a
 applied before the native-shape cache check. A measured List frame owns body and footer allocation.
 The one-column uniform virtualizing layout and its explicit total height use that same row metric,
 preventing stale estimated scroll extents after live text-size changes. Allocation keeps double precision
-through the 101-DPI boundary; graphics conversion happens afterward.
+through the 101-DPI boundary; graphics conversion happens afterward. A second frame scroller activates
+only when the pinned footer plus one whole row or recovery cannot fit. In that mode the existing footer
+moves into the frame; its geometry owns the extent and focus-reveal offsets. Restoring space or switching
+to Radial returns the footer to its original root slot and preserves its focus kind.
 Both layouts use XAML acrylic and shadows in the same visual tree as their controls. Neither replays
 an entrance animation or shows a separately committed native plate. Cold-opening checks
 verify bound, arranged rows and full-opacity, unscaled content without an active entrance animation.
@@ -275,8 +282,13 @@ The ordinary SelectorSmoke suite also runs icon-independent List polish assertio
 directory or installed browsers. Set `QUIVER_SELECTOR_LIST_NAVIGATION_ONLY=1` to run the focused List
 navigation and repeated-wrap fixture. `QUIVER_SELECTOR_TEXT_SCALE_ONLY=1` runs strict controlled-font
 checks from 1x through 2.25x, including live increases/decreases, exact scroll extents, row text, keycaps,
-recovery/footer separation and full wrap reveal. These multiply font sizes in native controls without
-changing Windows settings; they do not qualify the actual global accessibility-setting event path.
+recovery/footer separation and full wrap reveal. Profile fixtures are restored and required after every
+reopen and visible constrained refresh. Constrained checks also exercise recovery/footer focus, Tab,
+frame scrolling, return to normal size and List/Radial switching in simulated 200 and 226-DIP work areas
+at the actual native raster scale. Compiled geometry covers the corresponding 600 and 680-pixel work
+areas at 300%. Native checks do not change Windows settings or qualify real 300% desktop appearance,
+the actual global accessibility-setting event path, or mouse-wheel chaining between the two scrollers.
+A target taller than the padded frame viewport cannot be shown whole at once.
 A separate child process with missing SelectorWindow XAML checks
 that failed construction shuts down without a second exception.
 
