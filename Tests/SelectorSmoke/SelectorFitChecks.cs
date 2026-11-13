@@ -209,7 +209,7 @@ internal static class SelectorFitChecks
 
             bool HasSize(SelectorLayout layout, int count)
             {
-                var bounds = opening.Place(SelectorWindow.GeometryFor(layout, RadialMetrics.For(count)));
+                var bounds = opening.Place(SelectorWindow.GeometryFor(layout, RadialMetrics.For(count), window.ListGeometry));
                 return window.AppWindow.Size.Width == bounds.Width && window.AppWindow.Size.Height == bounds.Height;
             }
         }

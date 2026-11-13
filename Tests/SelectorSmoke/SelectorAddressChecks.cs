@@ -13,9 +13,11 @@ internal static class SelectorAddressChecks
         [
             ("http://localhost:3000/login", "localhost:3000", "/login", false),
             ("http://localhost:5000/login", "localhost:5000", "/login", false),
-            ("http://www.example.com:80/login", "example.com", "/login", false),
-            ("https://www.example.com:8443/login?a=1#section", "example.com:8443", "/login?a=1#section", true),
-            ("https://www.example.com:443/login", "example.com", "/login", true),
+            ("http://www.example.com:80/login", "www.example.com", "/login", false),
+            ("https://www.example.com:8443/login?a=1#section", "www.example.com:8443", "/login?a=1#section", true),
+            ("https://www.example.com:443/login", "www.example.com", "/login", true),
+            ("https://www.example.com/login", "www.example.com", "/login", true),
+            ("https://example.com/login", "example.com", "/login", true),
             ("http://[::1]:3000/login", "[::1]:3000", "/login", false),
             ("https://[2001:db8::1]:8443/?q=1#part", "[2001:db8::1]:8443", "/?q=1#part", true),
             ("https://[::1]:443/", "[::1]", "/", true),
@@ -39,7 +41,10 @@ internal static class SelectorAddressChecks
         Check(SelectorAddress.For(null, true) == new SelectorAddress("", "", false), "empty destination");
         Check(SelectorAddress.For("http://localhost:3000/login", false).Title == "localhost",
             "Radial retains its existing host caption with a complete URL below");
-        Console.WriteLine("PASS: shortened List addresses retain non-default HTTP(S) ports, bracket IPv6, and preserve other destinations.");
+        Check(SelectorAddress.For("https://www.example.com/login", true).Title
+            != SelectorAddress.For("https://example.com/login", true).Title,
+            "shortened List captions distinguish www and apex hosts");
+        Console.WriteLine("PASS: shortened List addresses retain complete HTTP(S) hosts, non-default ports, bracket IPv6, and preserve other destinations.");
     }
 
     public static async Task RunAsync(SelectorWindow window, TestSettings settings)

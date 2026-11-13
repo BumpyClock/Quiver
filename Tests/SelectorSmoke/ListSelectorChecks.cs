@@ -43,8 +43,9 @@ internal static class ListSelectorChecks
         Check(scroll.ScrollableHeight == 0, "two browser rows fit without a scrollbar");
         var p1 = first.TransformToVisual(ring).TransformPoint(default);
         var p2 = second.TransformToVisual(ring).TransformPoint(default);
-        Check(first.ActualHeight == 52
-            && first.ActualWidth > 250 && Math.Abs(p1.X - p2.X) < 1 && Math.Abs(p2.Y - p1.Y - 52) < 1,
+        Check(first.ActualHeight == window.ListGeometry.Row
+            && first.ActualWidth > 250 && Math.Abs(p1.X - p2.X) < 1
+            && Math.Abs(p2.Y - p1.Y - window.ListGeometry.Row) < 1,
             "browser choices form full-width vertical rows");
         second.FocusItem(FocusState.Keyboard);
         await SmokeApplication.WaitForAsync(() => second.IsSelected && ReferenceEquals(
@@ -173,7 +174,7 @@ internal static class ListSelectorChecks
         var flower = (FrameworkElement)root.FindName("ListHost");
         var visual = ElementCompositionPreview.GetElementVisual(flower);
         Check(ring.ItemsSource == window.ViewModel.Browsers
-            && ring.TryGetElement(0) is ListBrowserItem { ActualHeight: 52 },
+            && ring.TryGetElement(0) is ListBrowserItem item && item.ActualHeight == window.ListGeometry.Row,
             "cold list has bound and arranged browser rows when shown");
         CheckHostFitsWindow(window);
         Check(((ScrollViewer)root.FindName("BrowserScroll")).ScrollableHeight == 0,

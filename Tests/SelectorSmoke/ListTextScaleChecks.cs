@@ -59,6 +59,7 @@ internal static class ListTextScaleChecks
                     if (count == 30) await CheckWrapAsync();
                     window.MinimizeWindow();
                     window.ShowWindow();
+                    Inject(count);
                     await Task.Delay(150);
                     root.UpdateLayout();
                     CheckFrame(count, "open");
@@ -108,6 +109,9 @@ internal static class ListTextScaleChecks
         void CheckFrame(int count, string path)
         {
             string at = FormattableString.Invariant($"(count {count}, text {textScale}, {path})");
+            Expect(window.ViewModel.Browsers.Count(item => item.Profile is not null)
+                == Enumerable.Range(0, count).Count(index => index % 3 != 1),
+                $"profiled entries are present {at}");
             var cardRect = Bounds(card, root);
             var hostRect = Bounds(listHost, root);
             double scale = root.XamlRoot.RasterizationScale;
